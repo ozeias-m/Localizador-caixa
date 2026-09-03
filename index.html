@@ -445,9 +445,28 @@
       }
       state.scanner = new Html5Qrcode("reader");
       try {
+        const supportedFormats = [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF
+        ];
         await state.scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 1.777 },
+          {
+            fps: 15,
+            qrbox: (viewfinderWidth, viewfinderHeight) => ({
+              width: Math.min(viewfinderWidth - 32, 420),
+              height: Math.min(180, Math.max(110, Math.round(viewfinderHeight * 0.32)))
+            }),
+            aspectRatio: 1.777,
+            formatsToSupport: supportedFormats,
+            disableFlip: true
+          },
           (decodedText) => showResult(decodedText, true),
           () => {}
         );
