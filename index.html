@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050806">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Localizador">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>Localizador de caixas</title>
+  <script src="https://unpkg.com/papaparse@5.4.3/papaparse.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #050806;
+      --surface: #102318;
+      --ink: #effff3;
+      --muted: #a8c2ad;
+      --primary: #36c96f;
+      --primary-dark: #229653;
+      --line: #285b39;
+      --danger: #b42318;
+      --danger-bg: #321614;
+      --success-bg: #12351e;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(circle at top right, #12351e 0, transparent 34rem), var(--bg);
+      font: 16px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .app { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 56px; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 30px; }
+    .eyebrow { color: var(--primary); font-size: .78rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 6px 0 8px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; letter-spacing: -.04em; }
+    .subtitle { max-width: 590px; margin: 0; color: var(--muted); }
+    .status-pill { white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; color: var(--muted); background: #102318; font-size: .86rem; }
+    .status-pill.ready { border-color: #36c96f; color: #8af0a9; background: var(--success-bg); }
+    .grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 20px; }
+    .card { border: 1px solid #285b39; border-radius: 20px; padding: 24px; background: #102318; box-shadow: var(--shadow); }
+    .card h2 { margin: 0 0 6px; font-size: 1.2rem; }
+    .card-intro { margin: 0 0 19px; color: var(--muted); font-size: .92rem; }
+    .upload-box { display: block; border: 1.5px dashed #4b9b61; border-radius: 14px; padding: 20px; background: #16351f; cursor: pointer; transition: border .2s, background .2s; }
+    .upload-box:hover, .upload-box:focus-within { border-color: var(--primary); background: #1b4528; }
+    .upload-box strong { display: block; margin-bottom: 4px; }
+    .upload-box span { color: var(--muted); font-size: .88rem; }
+    input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .file-name { display: block; overflow: hidden; margin-top: 11px; color: #8af0a9; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+    .stats { display: flex; gap: 12px; margin-top: 18px; }
+    .stat { flex: 1; border-radius: 12px; padding: 13px; background: #16351f; }
+    .stat b { display: block; font-size: 1.35rem; }
+    .stat span { color: var(--muted); font-size: .78rem; }
+    .progress-wrap { margin-top: 18px; }
+    .progress-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; color: var(--muted); font-size: .8rem; }
+    .progress-row strong { color: var(--primary-dark); }
+    progress { display: block; width: 100%; height: 10px; border: 0; border-radius: 99px; overflow: hidden; appearance: none; background: #21462c; }
+    progress::-webkit-progress-bar { background: #21462c; border-radius: 99px; }
+    progress::-webkit-progress-value { background: var(--primary); border-radius: 99px; transition: width .2s ease; }
+    progress::-moz-progress-bar { background: var(--primary); border-radius: 99px; }
+    .reader-shell { overflow: hidden; border-radius: 14px; background: #102725; }
+    #reader { min-height: 125px; }
+    #reader video { display: block; width: 100% !important; max-height: 290px; object-fit: cover; }
+    #reader__dashboard_section_csr, #reader__dashboard_section_swaplink { color: #fff; }
+    #reader__dashboard_section_csr button { border: 0; border-radius: 7px; padding: 7px 10px; color: var(--ink); cursor: pointer; }
+    .camera-placeholder { display: grid; min-height: 125px; place-items: center; padding: 22px; color: #b7d1cd; text-align: center; font-size: .9rem; }
+    .controls { display: flex; gap: 10px; margin-top: 15px; }
+    .manual-form { display: flex; gap: 10px; margin-top: 18px; }
+    input[type="text"] { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 12px 13px; color: #000; background: #fff; font: inherit; }
+    input[type="text"]:focus { outline: 3px solid rgba(15,118,110,.16); border-color: var(--primary); }
+    button { border: 0; border-radius: 10px; padding: 11px 15px; color: #fff; background: var(--primary); font: inherit; font-weight: 700; cursor: pointer; transition: background .2s, transform .1s; }
+    button:hover { background: var(--primary-dark); }
+    button:active { transform: translateY(1px); }
+    button.secondary { color: var(--primary-dark); background: #e4f2ef; }
+    button.secondary:hover { background: #d3eae5; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
+    .message.error { border-radius: 9px; padding: 10px 12px; color: var(--danger); background: var(--danger-bg); }
+    .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #16351f; }
+    .result.empty { align-items: center; color: var(--muted); text-align: center; }
+    .result-label { margin-bottom: 4px; color: var(--primary); font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .box-id { margin: 0 0 13px; color: var(--ink); font-size: clamp(2rem, 7vw, 3.8rem); line-height: 1; letter-spacing: -.05em; overflow-wrap: anywhere; }
+    .original-box { margin: -8px 0 13px; color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+    .quantity { display: flex; align-items: baseline; gap: 7px; color: var(--muted); }
+    .quantity strong { color: var(--ink); font-size: 1.6rem; }
+    .scan-code { margin: 13px 0 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+    .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
+    .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #16351f; }
+    .box-progress-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: .9rem; }
+    .box-progress-header strong { color: var(--primary); }
+    .box-progress-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--muted); font-size: .78rem; }
+    .box-progress-item.done { border-color: var(--primary); }
+    .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #16351f; }
+    .overall-progress .progress-row { margin-bottom: 9px; }
+    footer { margin-top: 22px; color: var(--muted); text-align: center; font-size: .8rem; }
+    @media (max-width: 760px) {
+      .app { width: min(100% - 22px, 560px); padding-top: 24px; }
+      header { display: block; }
+      .status-pill { display: inline-block; margin-top: 17px; }
+      .grid { grid-template-columns: 1fr; }
+      .card { padding: 19px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <div class="eyebrow">Operação de estoque</div>
+        <h1>Localizador de caixas</h1>
+        <p class="subtitle">Leia o código da peça e descubra rapidamente em qual caixa guardá-la.</p>
+      </div>
+      <div id="dataStatus" class="status-pill">Aguardando CSV</div>
+    </header>
+
+    <section class="grid">
+      <div class="card">
+        <h2>1. Carregue a lista</h2>
+        <p class="card-intro">Selecione o arquivo sem cabeçalho e separado por ponto-e-vírgula.</p>
+        <label class="upload-box" for="csvFile">
+          <strong>Escolher Lote</strong>
+          <span>O arquivo é processado apenas neste navegador.</span>
+          <span id="fileName" class="file-name">Nenhum arquivo selecionado</span>
+          <input id="csvFile" type="file" accept=".csv,text/csv">
+        </label>
+        <div class="stats" aria-live="polite">
+          <div class="stat"><b id="pieceCount">0</b><span>peças carregadas</span></div>
+          <div class="stat"><b id="boxCount">0</b><span>caixas encontradas</span></div>
+        </div>
+        <div class="progress-wrap" aria-live="polite">
+          <div class="progress-row"><span id="progressLabel">Progresso do carregamento</span><strong id="progressPercent">0%</strong></div>
+          <progress id="loadProgress" value="0" max="100" aria-label="Progresso do carregamento do arquivo">0%</progress>
+        </div>
+        <p id="loadMessage" class="message">Carregue o CSV para liberar a busca.</p>
+      </div>
+
+      <div class="card">
+        <h2>2. Leia o código</h2>
+        <p class="card-intro">Use a câmera traseira ou digite o código manualmente.</p>
+        <div class="reader-shell">
+          <div id="reader"><div class="camera-placeholder">A câmera será exibida aqui quando você iniciar o leitor.</div></div>
+        </div>
+        <div class="controls">
+          <button id="startCamera" type="button">Iniciar câmera</button>
+          <button id="stopCamera" class="secondary" type="button" disabled>Parar</button>
+        </div>
+        <form id="manualForm" class="manual-form">
+          <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite ou use leitor USB" aria-label="Código de barras">
+          <button type="submit">Buscar</button>
+        </form>
+        <p id="scanMessage" class="message" aria-live="polite"></p>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1">
+        <h2>Resultado</h2>
+        <div id="result" class="result empty" aria-live="polite">O resultado da leitura aparecerá aqui.</div>
+      </div>
+    </section>
+    <section class="card" style="margin-top: 20px">
+      <h2>Conferência das caixas</h2>
+      <p class="card-intro">Acompanhe o progresso de cada caixa conforme as peças forem lidas.</p>
+      <div class="overall-progress">
+        <div class="progress-row"><span id="overallProgressLabel">Progresso geral</span><strong id="overallProgressPercent">0%</strong></div>
+        <progress id="overallProgress" value="0" max="100" aria-label="Progresso geral da conferência">0%</progress>
+        <div class="box-progress-meta"><span id="overallScanned">0 peças conferidas</span><span id="overallRemaining">0 peças faltando</span></div>
+      </div>
+      <div id="boxProgressList" class="box-progress-list">
+        <p class="message">Carregue o CSV para visualizar as caixas.</p>
+      </div>
+    </section>
+    <footer>Coluna H = código de barras · Coluna I = ID da caixa</footer>
+  </main>
+
+  <script>
+    "use strict";
+    const STORAGE_KEY = "localizador-caixas-state-v1";
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0 };
+    const $ = (id) => document.getElementById(id);
+
+    function setMessage(element, text, isError) {
+      element.textContent = text || "";
+      element.classList.toggle("error", Boolean(isError));
+    }
+
+    function normalize(value) {
+      return String(value == null ? "" : value).trim();
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          barcodeMap: Array.from(state.barcodeMap.entries()),
+          scannedByBox: Array.from(state.scannedByBox.entries()),
+          scannedCodes: Array.from(state.scannedCodes),
+          boxes: state.boxes,
+          pieces: state.pieces,
+          fileName: $("fileName").textContent
+        }));
+      } catch (error) {
+        setMessage($("loadMessage"), "A lista foi carregada, mas não foi possível mantê-la salva neste navegador.", true);
+      }
+    }
+
+    function restoreState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
+        const data = JSON.parse(saved);
+        state.barcodeMap = new Map(data.barcodeMap || []);
+        state.scannedByBox = new Map(data.scannedByBox || []);
+        state.scannedCodes = new Set(data.scannedCodes || []);
+        state.boxes = data.boxes || [];
+        state.pieces = Number(data.pieces) || 0;
+        if (!state.barcodeMap.size || !state.boxes.length) return;
+        $("fileName").textContent = data.fileName || "Lote salvo no navegador";
+        $("pieceCount").textContent = state.pieces.toLocaleString("pt-BR");
+        $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
+        $("dataStatus").textContent = "Lote restaurado";
+        $("dataStatus").classList.add("ready");
+        updateProgress(100, "Arquivo carregado");
+        setMessage($("loadMessage"), "Lote restaurado automaticamente. Você pode continuar a conferência.", false);
+        renderBoxProgress();
+      } catch (error) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    function updateProgress(percent, label) {
+      const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+      $("loadProgress").value = safePercent;
+      $("progressPercent").textContent = safePercent + "%";
+      $("progressLabel").textContent = label;
+    }
+
+    function renderBoxProgress() {
+      const list = $("boxProgressList");
+      const scannedTotal = Array.from(state.scannedByBox.values()).reduce((total, count) => total + count, 0);
+      const overallPercent = state.pieces ? Math.round((scannedTotal / state.pieces) * 100) : 0;
+      $("overallProgress").value = overallPercent;
+      $("overallProgressPercent").textContent = overallPercent + "%";
+      $("overallScanned").textContent = scannedTotal.toLocaleString("pt-BR") + " peças conferidas";
+      $("overallRemaining").textContent = Math.max(state.pieces - scannedTotal, 0).toLocaleString("pt-BR") + " peças faltando";
+      if (!state.boxes || !state.boxes.length) {
+        list.innerHTML = '<p class="message">Carregue o CSV para visualizar as caixas.</p>';
+        return;
+      }
+      list.innerHTML = state.boxes.map((box) => {
+        const scanned = state.scannedByBox.get(box.id) || 0;
+        const percent = box.quantity ? Math.round((scanned / box.quantity) * 100) : 0;
+        const done = scanned >= box.quantity;
+        return '<div class="box-progress-item' + (done ? ' done' : '') + '">' +
+          '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
+          '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
+          '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
+          '</div>';
+      }).join("");
+    }
+
+    function parseCsvLine(line) {
+      const columns = [];
+      let value = "";
+      let quoted = false;
+      for (let index = 0; index < line.length; index += 1) {
+        const character = line[index];
+        if (character === '"') {
+          if (quoted && line[index + 1] === '"') {
+            value += '"';
+            index += 1;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (character === ";" && !quoted) {
+          columns.push(value);
+          value = "";
+        } else {
+          value += character;
+        }
+      }
+      columns.push(value);
+      return columns;
+    }
+
+    function parseCsvWithoutLibrary(file, onRows) {
+      const reader = new FileReader();
+      reader.onprogress = (event) => {
+        if (event.lengthComputable) updateProgress((event.loaded / event.total) * 100, "Lendo arquivo...");
+      };
+      reader.onerror = () => setMessage($("loadMessage"), "Erro ao ler o arquivo local.", true);
+      reader.onload = () => {
+        const rows = String(reader.result).split(/\r?\n/).filter((line) => line.trim()).map(parseCsvLine);
+        onRows(rows);
+      };
+      reader.readAsText(file, "UTF-8");
+    }
+
+    function showResult(code, fromCamera) {
+      const result = $("result");
+      const normalizedCode = normalize(code);
+      if (!state.barcodeMap.size) {
+        result.className = "result empty";
+        result.textContent = "Carregue o CSV antes de fazer uma busca.";
+        setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
+        return;
+      }
+      const item = state.barcodeMap.get(normalizedCode);
+      if (!item) {
+        result.className = "result empty";
+        result.textContent = "Código não encontrado na lista carregada.";
+        setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
+        return;
+      }
+      if (fromCamera) {
+        const now = Date.now();
+        if (normalizedCode === state.lastCameraCode && now - state.lastCameraRead < 1500) return;
+        state.lastCameraCode = normalizedCode;
+        state.lastCameraRead = now;
+      }
+      if (state.scannedCodes.has(normalizedCode)) {
+        setMessage($("scanMessage"), "Aviso: este código já foi conferido e não será contado novamente.", true);
+        return;
+      }
+      state.scannedCodes.add(normalizedCode);
+      const scanned = (state.scannedByBox.get(item.boxId) || 0) + 1;
+      state.scannedByBox.set(item.boxId, Math.min(scanned, item.quantity));
+      saveState();
+      const scannedTotal = state.scannedByBox.get(item.boxId);
+      const remaining = Math.max(item.quantity - scannedTotal, 0);
+      renderBoxProgress();
+      result.className = "result";
+      result.innerHTML = '<div class="result-label">Guardar na caixa</div>' +
+        '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
+        '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
+        '<div class="quantity">Peças lidas: <strong>' + scannedTotal + '</strong></div>' +
+        '<div class="quantity">Faltam: <strong>' + remaining + '</strong> peças</div>' +
+        '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div>';
+      result.querySelector(".box-number").textContent = item.boxNumber;
+      result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
+      setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
+      $("manualCode").value = normalizedCode;
+    }
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+    }
+
+    function parseCsv(file) {
+      const map = new Map();
+      const boxCounts = new Map();
+      const boxNumbers = new Map();
+      let pieces = 0;
+      let invalidRows = 0;
+      state.scannedByBox = new Map();
+      state.scannedCodes = new Set();
+      state.boxes = [];
+      state.pieces = 0;
+      state.lastCameraCode = "";
+      state.lastCameraRead = 0;
+      renderBoxProgress();
+      $("dataStatus").textContent = "Processando CSV...";
+      $("dataStatus").classList.remove("ready");
+      updateProgress(0, "Lendo arquivo...");
+      const finish = () => {
+        if (!map.size) {
+          updateProgress(100, "Processamento concluído");
+          setMessage($("loadMessage"), "Nenhuma linha válida foi encontrada nas colunas H e I.", true);
+          return;
+        }
+        map.forEach((item) => { item.quantity = boxCounts.get(item.boxId); });
+        state.barcodeMap = map;
+        state.boxes = Array.from(boxNumbers.entries()).map(([id, number]) => ({
+          id: id,
+          number: number,
+          quantity: boxCounts.get(id)
+        }));
+        state.pieces = pieces;
+        $("pieceCount").textContent = pieces.toLocaleString("pt-BR");
+        $("boxCount").textContent = new Set(Array.from(map.values(), (item) => item.boxId)).size.toLocaleString("pt-BR");
+        $("dataStatus").textContent = "CSV pronto para consulta";
+        $("dataStatus").classList.add("ready");
+        updateProgress(100, "Arquivo carregado");
+        const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas ignoradas." : "";
+        setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + warning, false);
+        $("result").className = "result empty";
+        $("result").textContent = "Aguardando o próximo código.";
+        renderBoxProgress();
+        saveState();
+      };
+      const processRows = (rows) => {
+        rows.forEach((row) => {
+          const barcode = normalize(row[7]);
+          const boxId = normalize(row[8]);
+          if (!barcode || !boxId) { invalidRows += 1; return; }
+          pieces += 1;
+          boxCounts.set(boxId, (boxCounts.get(boxId) || 0) + 1);
+          if (!boxNumbers.has(boxId)) boxNumbers.set(boxId, boxNumbers.size + 1);
+          if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
+        });
+        setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
+      };
+      if (typeof Papa === "undefined") {
+        parseCsvWithoutLibrary(file, (rows) => { processRows(rows); finish(); });
+        return;
+      }
+      Papa.parse(file, {
+        delimiter: ";",
+        header: false,
+        skipEmptyLines: "greedy",
+        encoding: "UTF-8",
+        worker: true,
+        chunkSize: 1024 * 1024,
+        chunk: (parsed) => {
+          if (parsed.errors.length) {
+            setMessage($("loadMessage"), "Não foi possível ler o CSV: " + parsed.errors[0].message, true);
+            return;
+          }
+          processRows(parsed.data);
+          const percent = file.size ? (parsed.meta.cursor / file.size) * 100 : 100;
+          updateProgress(percent, "Lendo arquivo...");
+          setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
+        },
+        complete: finish,
+        error: (error) => {
+          updateProgress(0, "Falha no carregamento");
+          setMessage($("loadMessage"), "Erro ao abrir o arquivo: " + error.message, true);
+        }
+      });
+    }
+
+    async function startCamera() {
+      if (state.scanning) return;
+      if (!window.Html5Qrcode) {
+        setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
+        return;
+      }
+      state.scanner = new Html5Qrcode("reader");
+      try {
+        await state.scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 1.777 },
+          (decodedText) => showResult(decodedText, true),
+          () => {}
+        );
+        state.scanning = true;
+        $("startCamera").disabled = true;
+        $("stopCamera").disabled = false;
+        setMessage($("scanMessage"), "Câmera ativa. Aponte para o código de barras.", false);
+      } catch (error) {
+        state.scanner = null;
+        setMessage($("scanMessage"), "Não foi possível acessar a câmera. Verifique a permissão ou use a busca manual.", true);
+        $("reader").innerHTML = '<div class="camera-placeholder">Câmera indisponível. Você ainda pode digitar o código.</div>';
+      }
+    }
+
+    async function stopCamera() {
+      if (!state.scanner || !state.scanning) return;
+      await state.scanner.stop();
+      state.scanner.clear();
+      state.scanner = null;
+      state.scanning = false;
+      $("startCamera").disabled = false;
+      $("stopCamera").disabled = true;
+      $("reader").innerHTML = '<div class="camera-placeholder">A câmera foi pausada.</div>';
+    }
+
+    $("csvFile").addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      $("fileName").textContent = file.name;
+      setMessage($("loadMessage"), "Processando arquivo...", false);
+      parseCsv(file);
+    });
+    $("manualForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      showResult($("manualCode").value, false);
+    });
+    $("startCamera").addEventListener("click", startCamera);
+    $("stopCamera").addEventListener("click", stopCamera);
+    window.addEventListener("pagehide", saveState);
+    window.addEventListener("beforeunload", saveState);
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+    restoreState();
+  </script>
+</body>
+</html>
