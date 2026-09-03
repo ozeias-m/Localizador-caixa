@@ -64,7 +64,7 @@
     progress::-moz-progress-bar { background: var(--primary); border-radius: 99px; }
     .reader-shell { overflow: hidden; border-radius: 14px; background: #102725; }
     #reader { min-height: 125px; }
-    #reader video { display: block; width: 100% !important; max-height: 290px; object-fit: cover; }
+    #reader video { display: block; width: 100% !important; max-height: 360px; object-fit: cover; }
     #reader__dashboard_section_csr, #reader__dashboard_section_swaplink { color: #fff; }
     #reader__dashboard_section_csr button { border: 0; border-radius: 7px; padding: 7px 10px; color: var(--ink); cursor: pointer; }
     .camera-placeholder { display: grid; min-height: 125px; place-items: center; padding: 22px; color: #b7d1cd; text-align: center; font-size: .9rem; }
@@ -453,10 +453,18 @@
           Html5QrcodeSupportedFormats.EAN_8,
           Html5QrcodeSupportedFormats.UPC_A,
           Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.ITF
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.RSS_14,
+          Html5QrcodeSupportedFormats.RSS_EXPANDED
         ];
         await state.scanner.start(
-          { facingMode: "environment" },
+          {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30, min: 15 }
+          },
           {
             fps: 15,
             qrbox: (viewfinderWidth, viewfinderHeight) => ({
@@ -465,7 +473,7 @@
             }),
             aspectRatio: 1.777,
             formatsToSupport: supportedFormats,
-            disableFlip: true
+            disableFlip: false
           },
           (decodedText) => showResult(decodedText, true),
           () => {}
@@ -473,7 +481,14 @@
         state.scanning = true;
         $("startCamera").disabled = true;
         $("stopCamera").disabled = false;
-        setMessage($("scanMessage"), "Câmera ativa. Aponte para o código de barras.", false);
+        try {
+          await state.scanner.applyVideoConstraints({
+            advanced: [{ focusMode: "continuous" }]
+          });
+        } catch (error) {
+          // Alguns navegadores não expõem controle de foco pela câmera web.
+        }
+        setMessage($("scanMessage"), "Câmera ativa. Mantenha a etiqueta inteira na faixa verde, bem iluminada e sem reflexo.", false);
       } catch (error) {
         state.scanner = null;
         setMessage($("scanMessage"), "Não foi possível acessar a câmera. Verifique a permissão ou use a busca manual.", true);
