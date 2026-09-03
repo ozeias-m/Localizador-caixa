@@ -304,6 +304,8 @@
         result.className = "result empty";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
         setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
+        $("manualCode").value = "";
+        $("manualCode").focus();
         return;
       }
       const item = state.barcodeMap.get(normalizedCode);
@@ -311,6 +313,8 @@
         result.className = "result empty";
         result.textContent = "Código não encontrado na lista carregada.";
         setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
+        $("manualCode").value = "";
+        $("manualCode").focus();
         return;
       }
       if (fromCamera) {
@@ -321,6 +325,8 @@
       }
       if (state.scannedCodes.has(normalizedCode)) {
         setMessage($("scanMessage"), "Aviso: este código já foi conferido e não será contado novamente.", true);
+        $("manualCode").value = "";
+        $("manualCode").focus();
         return;
       }
       state.scannedCodes.add(normalizedCode);
@@ -340,7 +346,8 @@
       result.querySelector(".box-number").textContent = item.boxNumber;
       result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
       setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
-      $("manualCode").value = normalizedCode;
+      $("manualCode").value = "";
+      $("manualCode").focus();
     }
 
     function escapeHtml(value) {
