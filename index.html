@@ -181,7 +181,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0 };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError) {
@@ -191,6 +191,40 @@
 
     function normalize(value) {
       return String(value == null ? "" : value).trim();
+    }
+
+    function prepareAudio() {
+      if (!window.AudioContext && !window.webkitAudioContext) return;
+      if (!state.audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        state.audioContext = new AudioContextClass();
+      }
+      if (state.audioContext.state === "suspended") state.audioContext.resume();
+    }
+
+    function playScanSound(type) {
+      prepareAudio();
+      if (!state.audioContext) return;
+      const context = state.audioContext;
+      const patterns = {
+        success: [{ frequency: 880, duration: 0.12, delay: 0 }, { frequency: 1320, duration: 0.16, delay: 0.13 }],
+        error: [{ frequency: 220, duration: 0.28, delay: 0 }],
+        duplicate: [{ frequency: 440, duration: 0.1, delay: 0 }, { frequency: 440, duration: 0.1, delay: 0.13 }, { frequency: 440, duration: 0.1, delay: 0.26 }]
+      };
+      patterns[type].forEach((tone) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const startAt = context.currentTime + tone.delay;
+        oscillator.type = "sine";
+        oscillator.frequency.value = tone.frequency;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + tone.duration);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + tone.duration + 0.02);
+      });
     }
 
     function saveState() {
@@ -307,6 +341,7 @@
         result.className = "result empty";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
         setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
+        playScanSound("error");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -316,6 +351,7 @@
         result.className = "result empty";
         result.textContent = "Código não encontrado na lista carregada.";
         setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
+        playScanSound("error");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -328,6 +364,7 @@
       }
       if (state.scannedCodes.has(normalizedCode)) {
         setMessage($("scanMessage"), "Aviso: este código já foi conferido e não será contado novamente.", true);
+        playScanSound("duplicate");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -349,6 +386,7 @@
       result.querySelector(".box-number").textContent = item.boxNumber;
       result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
       setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
+      playScanSound("success");
       $("manualCode").value = "";
       $("manualCode").focus();
     }
@@ -442,6 +480,7 @@
 
     async function startCamera() {
       if (state.scanning) return;
+      prepareAudio();
       if (!window.Html5Qrcode) {
         setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
         return;
@@ -519,6 +558,7 @@
     });
     $("manualForm").addEventListener("submit", (event) => {
       event.preventDefault();
+      prepareAudio();
       showResult($("manualCode").value, false);
     });
     $("startCamera").addEventListener("click", startCamera);
