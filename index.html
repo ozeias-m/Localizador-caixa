@@ -18,12 +18,12 @@
       --surface: #102318;
       --ink: #effff3;
       --muted: #a8c2ad;
-      --primary: #36c96f;
-      --primary-dark: #229653;
+      --primary: #91c83e;
+      --primary-dark: #5f8f22;
       --line: #285b39;
       --danger: #b42318;
       --danger-bg: #321614;
-      --success-bg: #12351e;
+      --success-bg: #263617;
       --shadow: 0 18px 45px rgba(0, 0, 0, .35);
     }
     * { box-sizing: border-box; }
@@ -34,8 +34,10 @@
       background: radial-gradient(circle at top right, #12351e 0, transparent 34rem), var(--bg);
       font: 16px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .app { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 56px; }
+    .app { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 26px 0 56px; }
     header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 30px; }
+    .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+    .brand img { display: block; width: min(190px, 42vw); height: auto; border-radius: 6px; }
     .eyebrow { color: var(--primary); font-size: .78rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
     h1 { margin: 6px 0 8px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; letter-spacing: -.04em; }
     .subtitle { max-width: 590px; margin: 0; color: var(--muted); }
@@ -45,14 +47,14 @@
     .card { border: 1px solid #285b39; border-radius: 20px; padding: 24px; background: #102318; box-shadow: var(--shadow); }
     .card h2 { margin: 0 0 6px; font-size: 1.2rem; }
     .card-intro { margin: 0 0 19px; color: var(--muted); font-size: .92rem; }
-    .upload-box { display: block; border: 1.5px dashed #4b9b61; border-radius: 14px; padding: 20px; background: #16351f; cursor: pointer; transition: border .2s, background .2s; }
-    .upload-box:hover, .upload-box:focus-within { border-color: var(--primary); background: #1b4528; }
+    .upload-box { display: block; border: 1.5px dashed #739f35; border-radius: 14px; padding: 20px; background: #263617; cursor: pointer; transition: border .2s, background .2s; }
+    .upload-box:hover, .upload-box:focus-within { border-color: var(--primary); background: #344b1d; }
     .upload-box strong { display: block; margin-bottom: 4px; }
     .upload-box span { color: var(--muted); font-size: .88rem; }
     input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
-    .file-name { display: block; overflow: hidden; margin-top: 11px; color: #8af0a9; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+    .file-name { display: block; overflow: hidden; margin-top: 11px; color: #c6e98a; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
     .stats { display: flex; gap: 12px; margin-top: 18px; }
-    .stat { flex: 1; border-radius: 12px; padding: 13px; background: #16351f; }
+    .stat { flex: 1; border-radius: 12px; padding: 13px; background: #263617; }
     .stat b { display: block; font-size: 1.35rem; }
     .stat span { color: var(--muted); font-size: .78rem; }
     .progress-wrap { margin-top: 18px; }
@@ -80,7 +82,7 @@
     button:disabled { opacity: .55; cursor: not-allowed; }
     .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
     .message.error { border-radius: 9px; padding: 10px 12px; color: var(--danger); background: var(--danger-bg); }
-    .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #16351f; }
+    .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #263617; }
     .result.empty { align-items: center; color: var(--muted); text-align: center; }
     .result-label { margin-bottom: 4px; color: var(--primary); font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
     .box-id { margin: 0 0 13px; color: var(--ink); font-size: clamp(2rem, 7vw, 3.8rem); line-height: 1; letter-spacing: -.05em; overflow-wrap: anywhere; }
@@ -89,12 +91,12 @@
     .quantity strong { color: var(--ink); font-size: 1.6rem; }
     .scan-code { margin: 13px 0 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
-    .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #16351f; }
+    .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #263617; }
     .box-progress-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: .9rem; }
     .box-progress-header strong { color: var(--primary); }
     .box-progress-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--muted); font-size: .78rem; }
     .box-progress-item.done { border-color: var(--primary); }
-    .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #16351f; }
+    .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #263617; }
     .overall-progress .progress-row { margin-bottom: 9px; }
     footer { margin-top: 22px; color: var(--muted); text-align: center; font-size: .8rem; }
     @media (max-width: 760px) {
@@ -110,6 +112,7 @@
   <main class="app">
     <header>
       <div>
+        <div class="brand"><img src="logo.png" alt="Silo Movelaria"></div>
         <div class="eyebrow">Operação de estoque</div>
         <h1>Localizador de caixas</h1>
         <p class="subtitle">Leia o código da peça e descubra rapidamente em qual caixa guardá-la.</p>
