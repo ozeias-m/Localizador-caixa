@@ -214,8 +214,9 @@
       });
     }
 
-    function playScanSound(type) {
-      if (!state.audioContext) return;
+    async function playScanSound(type) {
+      const audioReady = await prepareAudio();
+      if (!audioReady || !state.audioContext) return;
       const context = state.audioContext;
       const patterns = {
         success: [{ frequency: 880, duration: 0.12, delay: 0 }, { frequency: 1320, duration: 0.16, delay: 0.13 }],
@@ -229,7 +230,7 @@
         oscillator.type = "sine";
         oscillator.frequency.value = tone.frequency;
         gain.gain.setValueAtTime(0.0001, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.35, startAt + 0.015);
         gain.gain.exponentialRampToValueAtTime(0.0001, startAt + tone.duration);
         oscillator.connect(gain);
         gain.connect(context.destination);
@@ -347,14 +348,15 @@
       reader.readAsText(file, "UTF-8");
     }
 
-    function showResult(code, fromCamera) {
+    async function showResult(code, fromCamera) {
       const result = $("result");
       const normalizedCode = normalize(code);
+      await prepareAudio();
       if (!state.barcodeMap.size) {
         result.className = "result empty";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
         setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
-        playScanSound("error");
+        await playScanSound("error");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -364,7 +366,7 @@
         result.className = "result empty";
         result.textContent = "Código não encontrado na lista carregada.";
         setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
-        playScanSound("error");
+        await playScanSound("error");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -377,7 +379,7 @@
       }
       if (state.scannedCodes.has(normalizedCode)) {
         setMessage($("scanMessage"), "Aviso: este código já foi conferido e não será contado novamente.", true);
-        playScanSound("duplicate");
+        await playScanSound("duplicate");
         $("manualCode").value = "";
         $("manualCode").focus();
         return;
@@ -399,7 +401,7 @@
       result.querySelector(".box-number").textContent = item.boxNumber;
       result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
       setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
-      playScanSound("success");
+      await playScanSound("success");
       $("manualCode").value = "";
       $("manualCode").focus();
     }
@@ -530,7 +532,7 @@
             formatsToSupport: supportedFormats,
             disableFlip: false
           },
-          (decodedText) => showResult(decodedText, true),
+          (decodedText) => { showResult(decodedText, true); },
           () => {}
         );
         state.scanning = true;
@@ -569,10 +571,10 @@
       setMessage($("loadMessage"), "Processando arquivo...", false);
       parseCsv(file);
     });
-    $("manualForm").addEventListener("submit", (event) => {
+    $("manualForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       prepareAudio();
-      showResult($("manualCode").value, false);
+      await showResult($("manualCode").value, false);
     });
     $("startCamera").addEventListener("click", startCamera);
     $("stopCamera").addEventListener("click", stopCamera);
