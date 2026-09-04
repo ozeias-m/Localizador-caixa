@@ -194,16 +194,27 @@
     }
 
     function prepareAudio() {
-      if (!window.AudioContext && !window.webkitAudioContext) return;
+      if (!window.AudioContext && !window.webkitAudioContext) return Promise.resolve(false);
       if (!state.audioContext) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         state.audioContext = new AudioContextClass();
       }
-      if (state.audioContext.state === "suspended") state.audioContext.resume();
+      const unlock = state.audioContext.state === "suspended"
+        ? state.audioContext.resume()
+        : Promise.resolve();
+      return unlock.then(() => {
+        const oscillator = state.audioContext.createOscillator();
+        const gain = state.audioContext.createGain();
+        gain.gain.value = 0.0001;
+        oscillator.connect(gain);
+        gain.connect(state.audioContext.destination);
+        oscillator.start();
+        oscillator.stop(state.audioContext.currentTime + 0.01);
+        return state.audioContext.state === "running";
+      });
     }
 
     function playScanSound(type) {
-      prepareAudio();
       if (!state.audioContext) return;
       const context = state.audioContext;
       const patterns = {
@@ -211,7 +222,7 @@
         error: [{ frequency: 220, duration: 0.28, delay: 0 }],
         duplicate: [{ frequency: 440, duration: 0.1, delay: 0 }, { frequency: 440, duration: 0.1, delay: 0.13 }, { frequency: 440, duration: 0.1, delay: 0.26 }]
       };
-      patterns[type].forEach((tone) => {
+      const emit = () => patterns[type].forEach((tone) => {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         const startAt = context.currentTime + tone.delay;
@@ -225,6 +236,8 @@
         oscillator.start(startAt);
         oscillator.stop(startAt + tone.duration + 0.02);
       });
+      if (context.state === "running") emit();
+      else context.resume().then(emit);
     }
 
     function saveState() {
@@ -480,7 +493,7 @@
 
     async function startCamera() {
       if (state.scanning) return;
-      prepareAudio();
+      await prepareAudio();
       if (!window.Html5Qrcode) {
         setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
         return;
