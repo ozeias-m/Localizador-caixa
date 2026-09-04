@@ -151,6 +151,7 @@
           <button id="startCamera" type="button">Iniciar câmera</button>
           <button id="stopCamera" class="secondary" type="button" disabled>Parar</button>
         </div>
+        <button id="enableAudio" class="secondary" type="button" style="margin-top: 10px">Ativar som</button>
         <form id="manualForm" class="manual-form">
           <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite ou use leitor USB" aria-label="Código de barras">
           <button type="submit">Buscar</button>
@@ -219,6 +220,7 @@
       if (!audioReady || !state.audioContext) return;
       const context = state.audioContext;
       const patterns = {
+        ready: [{ frequency: 660, duration: 0.12, delay: 0 }],
         success: [{ frequency: 880, duration: 0.12, delay: 0 }, { frequency: 1320, duration: 0.16, delay: 0.13 }],
         error: [{ frequency: 220, duration: 0.28, delay: 0 }],
         duplicate: [{ frequency: 440, duration: 0.1, delay: 0 }, { frequency: 440, duration: 0.1, delay: 0.13 }, { frequency: 440, duration: 0.1, delay: 0.26 }]
@@ -496,6 +498,7 @@
     async function startCamera() {
       if (state.scanning) return;
       await prepareAudio();
+      await playScanSound("ready");
       if (!window.Html5Qrcode) {
         setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
         return;
@@ -578,6 +581,16 @@
     });
     $("startCamera").addEventListener("click", startCamera);
     $("stopCamera").addEventListener("click", stopCamera);
+    $("enableAudio").addEventListener("click", async () => {
+      const enabled = await prepareAudio();
+      if (enabled) {
+        await playScanSound("ready");
+        $("enableAudio").textContent = "Som ativado";
+        setMessage($("scanMessage"), "Som ativado. O navegador emitirá sinais nas leituras.", false);
+      } else {
+        setMessage($("scanMessage"), "Não foi possível ativar o som neste navegador.", true);
+      }
+    });
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
