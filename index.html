@@ -195,6 +195,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
+    const LOT_FILTER_VERSION = "coluna-g-montagem-v1";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
@@ -260,12 +261,14 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return { activeLotId: "", lots: {} };
       const data = JSON.parse(saved);
-      if (data.lots) return data;
-      if (data.barcodeMap && data.boxes) {
-        const migratedId = "lot-restored";
-        return { activeLotId: migratedId, lots: { [migratedId]: data } };
-      }
-      return { activeLotId: "", lots: {} };
+      const lots = data.lots || {};
+      const filteredLots = Object.fromEntries(
+        Object.entries(lots).filter(([, lot]) => lot.filterVersion === LOT_FILTER_VERSION)
+      );
+      return {
+        activeLotId: filteredLots[data.activeLotId] ? data.activeLotId : "",
+        lots: filteredLots
+      };
     }
 
     function serializeCurrentLot() {
@@ -276,6 +279,7 @@
         boxes: state.boxes,
         pieces: state.pieces,
         fileName: state.lotName || $("fileName").textContent,
+        filterVersion: LOT_FILTER_VERSION,
         updatedAt: Date.now()
       };
     }
