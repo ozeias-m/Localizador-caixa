@@ -418,6 +418,7 @@
       const boxNumbers = new Map();
       let pieces = 0;
       let invalidRows = 0;
+      let filteredRows = 0;
       state.scannedByBox = new Map();
       state.scannedCodes = new Set();
       state.boxes = [];
@@ -431,7 +432,7 @@
       const finish = () => {
         if (!map.size) {
           updateProgress(100, "Processamento concluído");
-          setMessage($("loadMessage"), "Nenhuma linha válida foi encontrada nas colunas H e I.", true);
+          setMessage($("loadMessage"), "Nenhuma linha com \"montagem\" na coluna G e códigos válidos nas colunas H e I foi encontrada.", true);
           return;
         }
         map.forEach((item) => { item.quantity = boxCounts.get(item.boxId); });
@@ -447,8 +448,9 @@
         $("dataStatus").textContent = "CSV pronto para consulta";
         $("dataStatus").classList.add("ready");
         updateProgress(100, "Arquivo carregado");
-        const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas ignoradas." : "";
-        setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + warning, false);
+        const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas inválidas ignoradas." : "";
+        const filterSummary = " Filtro da coluna G: montagem; " + filteredRows.toLocaleString("pt-BR") + " linhas fora do filtro ignoradas.";
+        setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + filterSummary + warning, false);
         $("result").className = "result empty";
         $("result").textContent = "Aguardando o próximo código.";
         renderBoxProgress();
@@ -456,6 +458,11 @@
       };
       const processRows = (rows) => {
         rows.forEach((row) => {
+          const description = normalize(row[6]).toLocaleLowerCase();
+          if (!description.includes("montagem")) {
+            filteredRows += 1;
+            return;
+          }
           const barcode = normalize(row[7]);
           const boxId = normalize(row[8]);
           if (!barcode || !boxId) { invalidRows += 1; return; }
