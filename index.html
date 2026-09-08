@@ -591,7 +591,6 @@
         setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
         return;
       }
-      state.scanner = new Html5Qrcode("reader");
       try {
         const supportedFormats = [
           Html5QrcodeSupportedFormats.CODE_128,
@@ -606,26 +605,53 @@
           Html5QrcodeSupportedFormats.RSS_14,
           Html5QrcodeSupportedFormats.RSS_EXPANDED
         ];
-        await state.scanner.start(
+        const scanConfig = {
+          fps: 10,
+          qrbox: (viewfinderWidth, viewfinderHeight) => ({
+            width: Math.min(viewfinderWidth - 24, 420),
+            height: Math.min(180, Math.max(100, Math.round(viewfinderHeight * 0.32)))
+          }),
+          formatsToSupport: supportedFormats,
+          disableFlip: false
+        };
+        const basicScanConfig = {
+          fps: 8,
+          qrbox: scanConfig.qrbox,
+          disableFlip: false
+        };
+        const cameraAttempts = [
           {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30, min: 15 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 15 }
           },
-          {
-            fps: 15,
-            qrbox: (viewfinderWidth, viewfinderHeight) => ({
-              width: Math.min(viewfinderWidth - 32, 420),
-              height: Math.min(180, Math.max(110, Math.round(viewfinderHeight * 0.32)))
-            }),
-            aspectRatio: 1.777,
-            formatsToSupport: supportedFormats,
-            disableFlip: false
-          },
-          (decodedText) => { showResult(decodedText, true); },
-          () => {}
-        );
+          { facingMode: "environment" },
+          { facingMode: "user" }
+        ];
+        let lastError;
+        for (const options of [scanConfig, basicScanConfig]) {
+          if (state.scanner) break;
+          for (const cameraConfig of cameraAttempts) {
+            try {
+              state.scanner = new Html5Qrcode("reader");
+              await state.scanner.start(
+                cameraConfig,
+                options,
+                (decodedText) => { showResult(decodedText, true); },
+                () => {}
+              );
+              break;
+            } catch (error) {
+              lastError = error;
+              if (state.scanner) {
+                try { await state.scanner.clear(); } catch (clearError) {}
+                state.scanner = null;
+              }
+            }
+          }
+        }
+        if (!state.scanner) throw lastError || new Error("Câmera indisponível");
         state.scanning = true;
         $("startCamera").disabled = true;
         $("stopCamera").disabled = false;
@@ -639,7 +665,8 @@
         setMessage($("scanMessage"), "Câmera ativa. Mantenha a etiqueta inteira na faixa verde, bem iluminada e sem reflexo.", false);
       } catch (error) {
         state.scanner = null;
-        setMessage($("scanMessage"), "Não foi possível acessar a câmera. Verifique a permissão ou use a busca manual.", true);
+        const detail = error && error.message ? " (" + error.message + ")" : "";
+        setMessage($("scanMessage"), "Não foi possível iniciar a câmera neste aparelho. Confira se o navegador tem acesso à câmera e tente novamente." + detail, true);
         $("reader").innerHTML = '<div class="camera-placeholder">Câmera indisponível. Você ainda pode digitar o código.</div>';
       }
     }
