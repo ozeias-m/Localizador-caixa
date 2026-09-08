@@ -436,7 +436,7 @@
         setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
         await playScanSound("error");
         $("manualCode").value = "";
-        $("manualCode").focus();
+        if (!fromCamera) $("manualCode").focus();
         return;
       }
       const item = state.barcodeMap.get(normalizedCode);
@@ -446,7 +446,7 @@
         setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
         await playScanSound("error");
         $("manualCode").value = "";
-        $("manualCode").focus();
+        if (!fromCamera) $("manualCode").focus();
         return;
       }
       if (fromCamera) {
@@ -463,7 +463,7 @@
           " (ID: " + item.boxId + ") e não será contado novamente.", true);
         await playScanSound("duplicate");
         $("manualCode").value = "";
-        $("manualCode").focus();
+        if (!fromCamera) $("manualCode").focus();
         return;
       }
       state.scannedCodes.add(normalizedCode);
@@ -485,7 +485,7 @@
       setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
       await playScanSound("success");
       $("manualCode").value = "";
-      $("manualCode").focus();
+      if (!fromCamera) $("manualCode").focus();
     }
 
     function escapeHtml(value) {
