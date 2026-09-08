@@ -695,7 +695,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=3").catch(() => {});
     }
     restoreState();
   </script>
