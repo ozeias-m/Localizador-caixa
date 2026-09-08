@@ -81,6 +81,12 @@
     button.secondary:hover { background: #d3eae5; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
+    .lot-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .saved-lots { margin-top: 18px; }
+    .saved-lots h3 { margin: 0 0 9px; font-size: .95rem; }
+    .lot-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .lot-tab { border: 1px solid var(--line); color: var(--muted); background: #172d1d; font-size: .85rem; }
+    .lot-tab.active { border-color: var(--primary); color: #12200d; background: var(--primary); }
     .message.error { border-radius: 9px; padding: 10px 12px; color: var(--danger); background: var(--danger-bg); }
     .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #263617; }
     .result.empty { align-items: center; color: var(--muted); text-align: center; }
@@ -139,6 +145,13 @@
           <progress id="loadProgress" value="0" max="100" aria-label="Progresso do carregamento do arquivo">0%</progress>
         </div>
         <p id="loadMessage" class="message">Carregue o CSV para liberar a busca.</p>
+        <div class="lot-actions">
+          <button id="resetLot" class="secondary" type="button" disabled>Zerar lote atual</button>
+        </div>
+        <div id="savedLots" class="saved-lots" hidden>
+          <h3>Arquivos importados e conferências salvas</h3>
+          <div id="lotTabs" class="lot-tabs"></div>
+        </div>
       </div>
 
       <div class="card">
@@ -182,7 +195,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError) {
@@ -243,40 +256,89 @@
       else context.resume().then(emit);
     }
 
+    function getStoredData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return { activeLotId: "", lots: {} };
+      const data = JSON.parse(saved);
+      if (data.lots) return data;
+      if (data.barcodeMap && data.boxes) {
+        const migratedId = "lot-restored";
+        return { activeLotId: migratedId, lots: { [migratedId]: data } };
+      }
+      return { activeLotId: "", lots: {} };
+    }
+
+    function serializeCurrentLot() {
+      return {
+        barcodeMap: Array.from(state.barcodeMap.entries()),
+        scannedByBox: Array.from(state.scannedByBox.entries()),
+        scannedCodes: Array.from(state.scannedCodes),
+        boxes: state.boxes,
+        pieces: state.pieces,
+        fileName: state.lotName || $("fileName").textContent,
+        updatedAt: Date.now()
+      };
+    }
+
     function saveState() {
+      if (!state.lotId || !state.barcodeMap.size) return;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          barcodeMap: Array.from(state.barcodeMap.entries()),
-          scannedByBox: Array.from(state.scannedByBox.entries()),
-          scannedCodes: Array.from(state.scannedCodes),
-          boxes: state.boxes,
-          pieces: state.pieces,
-          fileName: $("fileName").textContent
-        }));
+        const data = getStoredData();
+        data.activeLotId = state.lotId;
+        data.lots[state.lotId] = serializeCurrentLot();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        renderSavedLots(data);
       } catch (error) {
         setMessage($("loadMessage"), "A lista foi carregada, mas não foi possível mantê-la salva neste navegador.", true);
       }
     }
 
+    function renderSavedLots(data) {
+      const lotIds = Object.keys(data.lots || {});
+      $("savedLots").hidden = !lotIds.length;
+      $("lotTabs").innerHTML = "";
+      lotIds.sort((first, second) => (data.lots[second].updatedAt || 0) - (data.lots[first].updatedAt || 0));
+      lotIds.forEach((lotId) => {
+        const lot = data.lots[lotId];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lot-tab" + (lotId === state.lotId ? " active" : "");
+        button.dataset.lotId = lotId;
+        button.textContent = lot.fileName || "Lote salvo";
+        $("lotTabs").appendChild(button);
+      });
+    }
+
+    function applyLot(lotId, lot, restoredMessage) {
+      state.lotId = lotId;
+      state.lotName = lot.fileName || "Lote salvo no navegador";
+      state.barcodeMap = new Map(lot.barcodeMap || []);
+      state.scannedByBox = new Map(lot.scannedByBox || []);
+      state.scannedCodes = new Set(lot.scannedCodes || []);
+      state.boxes = lot.boxes || [];
+      state.pieces = Number(lot.pieces) || 0;
+      $("fileName").textContent = state.lotName;
+      $("pieceCount").textContent = state.pieces.toLocaleString("pt-BR");
+      $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
+      $("dataStatus").textContent = restoredMessage ? "Lote restaurado" : "CSV pronto para consulta";
+      $("dataStatus").classList.add("ready");
+      $("resetLot").disabled = false;
+      updateProgress(100, "Arquivo carregado");
+      setMessage($("loadMessage"), restoredMessage || "Lista carregada. Você já pode iniciar a leitura.", false);
+      $("result").className = "result empty";
+      $("result").textContent = "Aguardando o próximo código.";
+      renderBoxProgress();
+      renderSavedLots(getStoredData());
+    }
+
     function restoreState() {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) return;
-        const data = JSON.parse(saved);
-        state.barcodeMap = new Map(data.barcodeMap || []);
-        state.scannedByBox = new Map(data.scannedByBox || []);
-        state.scannedCodes = new Set(data.scannedCodes || []);
-        state.boxes = data.boxes || [];
-        state.pieces = Number(data.pieces) || 0;
-        if (!state.barcodeMap.size || !state.boxes.length) return;
-        $("fileName").textContent = data.fileName || "Lote salvo no navegador";
-        $("pieceCount").textContent = state.pieces.toLocaleString("pt-BR");
-        $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
-        $("dataStatus").textContent = "Lote restaurado";
-        $("dataStatus").classList.add("ready");
-        updateProgress(100, "Arquivo carregado");
-        setMessage($("loadMessage"), "Lote restaurado automaticamente. Você pode continuar a conferência.", false);
-        renderBoxProgress();
+        const data = getStoredData();
+        const lotIds = Object.keys(data.lots);
+        if (!lotIds.length) return;
+        const activeLotId = data.activeLotId && data.lots[data.activeLotId] ? data.activeLotId : lotIds[0];
+        applyLot(activeLotId, data.lots[activeLotId], "Lote restaurado automaticamente. Você pode continuar a conferência.");
+        renderSavedLots(data);
       } catch (error) {
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -453,6 +515,7 @@
         setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + filterSummary + warning, false);
         $("result").className = "result empty";
         $("result").textContent = "Aguardando o próximo código.";
+        $("resetLot").disabled = false;
         renderBoxProgress();
         saveState();
       };
@@ -577,9 +640,36 @@
     $("csvFile").addEventListener("change", (event) => {
       const file = event.target.files[0];
       if (!file) return;
+      state.lotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      state.lotName = file.name;
       $("fileName").textContent = file.name;
       setMessage($("loadMessage"), "Processando arquivo...", false);
       parseCsv(file);
+    });
+    $("lotTabs").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-lot-id]");
+      if (!button || button.dataset.lotId === state.lotId) return;
+      if (state.scanning) await stopCamera();
+      const data = getStoredData();
+      const lot = data.lots[button.dataset.lotId];
+      if (lot) {
+        data.activeLotId = button.dataset.lotId;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
+      }
+    });
+    $("resetLot").addEventListener("click", () => {
+      if (!state.lotId || !state.barcodeMap.size) return;
+      if (!window.confirm("Zerar as peças conferidas deste lote? O arquivo continuará salvo para uso posterior.")) return;
+      state.scannedByBox = new Map();
+      state.scannedCodes = new Set();
+      state.lastCameraCode = "";
+      state.lastCameraRead = 0;
+      $("result").className = "result empty";
+      $("result").textContent = "Aguardando o próximo código.";
+      setMessage($("loadMessage"), "Conferência zerada. O lote continua disponível nas abas salvas.", false);
+      renderBoxProgress();
+      saveState();
     });
     $("manualForm").addEventListener("submit", async (event) => {
       event.preventDefault();
