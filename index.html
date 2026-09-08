@@ -98,10 +98,15 @@
     .scan-code { margin: 13px 0 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #263617; }
+    .box-progress-item { cursor: pointer; }
     .box-progress-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: .9rem; }
     .box-progress-header strong { color: var(--primary); }
     .box-progress-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--muted); font-size: .78rem; }
     .box-progress-item.done { border-color: var(--primary); }
+    .box-pieces { display: none; margin-top: 13px; border-top: 1px solid var(--line); padding-top: 10px; }
+    .box-progress-item.open .box-pieces { display: grid; gap: 7px; }
+    .box-piece { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; color: var(--muted); font-size: .82rem; }
+    .box-piece-code { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #263617; }
     .overall-progress .progress-row { margin-bottom: 9px; }
     footer { margin-top: 22px; color: var(--muted); text-align: center; font-size: .8rem; }
@@ -371,10 +376,15 @@
         const scanned = state.scannedByBox.get(box.id) || 0;
         const percent = box.quantity ? Math.round((scanned / box.quantity) * 100) : 0;
         const done = scanned >= box.quantity;
-        return '<div class="box-progress-item' + (done ? ' done' : '') + '">' +
+        const pieces = box.pieces || [];
+        const pieceList = pieces.length
+          ? pieces.map((piece) => '<div class="box-piece"><span>' + escapeHtml(piece.description || "Sem descrição") + '</span><span class="box-piece-code">' + escapeHtml(piece.barcode) + '</span></div>').join("")
+          : '<div class="message">Este lote foi salvo antes da lista de peças por caixa estar disponível. Importe o CSV novamente para visualizar os detalhes.</div>';
+        return '<div class="box-progress-item' + (done ? ' done' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="false">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
           '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
           '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
+          '<div class="box-pieces"><div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
           '</div>';
       }).join("");
     }
@@ -482,6 +492,7 @@
       const map = new Map();
       const boxCounts = new Map();
       const boxNumbers = new Map();
+      const boxPieces = new Map();
       let pieces = 0;
       let invalidRows = 0;
       let filteredRows = 0;
@@ -506,7 +517,8 @@
         state.boxes = Array.from(boxNumbers.entries()).map(([id, number]) => ({
           id: id,
           number: number,
-          quantity: boxCounts.get(id)
+          quantity: boxCounts.get(id),
+          pieces: boxPieces.get(id) || []
         }));
         state.pieces = pieces;
         $("pieceCount").textContent = pieces.toLocaleString("pt-BR");
@@ -536,6 +548,8 @@
           pieces += 1;
           boxCounts.set(boxId, (boxCounts.get(boxId) || 0) + 1);
           if (!boxNumbers.has(boxId)) boxNumbers.set(boxId, boxNumbers.size + 1);
+          if (!boxPieces.has(boxId)) boxPieces.set(boxId, []);
+          boxPieces.get(boxId).push({ description: normalize(row[5]), barcode: barcode });
           if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
         });
         setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
@@ -661,6 +675,21 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
       }
+    });
+    function toggleBoxDetails(item) {
+      const isOpen = item.classList.toggle("open");
+      item.setAttribute("aria-expanded", String(isOpen));
+    }
+    $("boxProgressList").addEventListener("click", (event) => {
+      const item = event.target.closest(".box-progress-item");
+      if (item) toggleBoxDetails(item);
+    });
+    $("boxProgressList").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const item = event.target.closest(".box-progress-item");
+      if (!item) return;
+      event.preventDefault();
+      toggleBoxDetails(item);
     });
     $("resetLot").addEventListener("click", () => {
       if (!state.lotId || !state.barcodeMap.size) return;
