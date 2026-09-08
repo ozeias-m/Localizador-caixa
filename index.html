@@ -456,7 +456,11 @@
         state.lastCameraRead = now;
       }
       if (state.scannedCodes.has(normalizedCode)) {
-        setMessage($("scanMessage"), "Aviso: este código já foi conferido e não será contado novamente.", true);
+        result.className = "result empty";
+        result.innerHTML = '<strong>Código já conferido</strong><span>Esta peça já foi registrada na Caixa ' +
+          escapeHtml(String(item.boxNumber)) + ' (ID: ' + escapeHtml(item.boxId) + ').</span>';
+        setMessage($("scanMessage"), "Aviso: este código já foi conferido na Caixa " + item.boxNumber +
+          " (ID: " + item.boxId + ") e não será contado novamente.", true);
         await playScanSound("duplicate");
         $("manualCode").value = "";
         $("manualCode").focus();
