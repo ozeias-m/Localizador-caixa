@@ -115,7 +115,13 @@
     .box-progress-item.done { border-color: var(--primary); }
     .box-pieces { display: none; margin-top: 13px; border-top: 1px solid var(--line); padding-top: 10px; }
     .box-progress-item.open .box-pieces { display: grid; gap: 7px; }
+    .box-piece-group { display: grid; gap: 6px; }
+    .box-piece-group-title { margin-top: 5px; color: var(--primary); font-size: .8rem; font-weight: 800; text-transform: uppercase; }
     .box-piece { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; color: var(--muted); font-size: .82rem; }
+    .box-piece.checked { color: #b9ed8a; }
+    .box-piece.checked .box-piece-code { color: #b9ed8a; }
+    .box-piece-status { color: var(--primary); font-weight: 800; text-transform: uppercase; }
+    .box-piece.open-piece .box-piece-status { color: #f1c75b; }
     .box-piece-code { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     #fullscreenToggle { margin-top: 10px; }
     body.fullscreen-mode { overflow: hidden; }
@@ -422,8 +428,17 @@
         const percent = box.quantity ? Math.round((scanned / box.quantity) * 100) : 0;
         const done = scanned >= box.quantity;
         const pieces = box.pieces || [];
+        const checkedPieces = pieces.filter((piece) => state.scannedCodes.has(normalize(piece.barcode)));
+        const openPieces = pieces.filter((piece) => !state.scannedCodes.has(normalize(piece.barcode)));
+        const renderPieceGroup = (title, group, isChecked) => group.length
+          ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
+            group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
+              '<span>' + escapeHtml(piece.description || "Sem descrição") + '</span><span><span class="box-piece-status">' +
+              (isChecked ? "Conferida" : "Em aberto") + '</span> · <span class="box-piece-code">' + escapeHtml(piece.barcode) + '</span></span></div>').join("") +
+            '</div>'
+          : "";
         const pieceList = pieces.length
-          ? pieces.map((piece) => '<div class="box-piece"><span>' + escapeHtml(piece.description || "Sem descrição") + '</span><span class="box-piece-code">' + escapeHtml(piece.barcode) + '</span></div>').join("")
+          ? renderPieceGroup("Conferidas", checkedPieces, true) + renderPieceGroup("Em aberto", openPieces, false)
           : '<div class="message">Este lote foi salvo antes da lista de peças por caixa estar disponível. Importe o CSV novamente para visualizar os detalhes.</div>';
         return '<div class="box-progress-item' + (done ? ' done' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="false">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
