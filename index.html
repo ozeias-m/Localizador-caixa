@@ -88,7 +88,17 @@
     .lot-tab { border: 1px solid var(--line); color: var(--muted); background: #172d1d; font-size: .85rem; }
     .lot-tab.active { border-color: var(--primary); color: #12200d; background: var(--primary); }
     .message.error { border-radius: 9px; padding: 10px 12px; color: var(--danger); background: var(--danger-bg); }
+    #scanMessage { font-size: clamp(1.35rem, 2.7vw, 2.35rem); font-weight: 800; line-height: 1.15; }
     .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #263617; }
+    .result.scan-result { min-height: 250px; padding: clamp(24px, 4vw, 48px); }
+    .result.scan-result .result-label { font-size: clamp(1.15rem, 2.2vw, 2rem); }
+    .result.scan-result .box-id { font-size: clamp(3rem, 10vw, 7rem); }
+    .result.scan-result .quantity { font-size: clamp(1.2rem, 2.5vw, 2rem); }
+    .result.scan-result .quantity strong { font-size: clamp(1.8rem, 4vw, 3.2rem); }
+    .result.scan-result .scan-code { font-size: clamp(1rem, 2vw, 1.5rem); }
+    .result.scan-result.success { border: 3px solid #91c83e; background: #203d1d; }
+    .result.scan-result.duplicate { border: 3px solid #e5b84b; background: #493817; }
+    .result.scan-result.error { border: 3px solid #e05b4f; background: #4a1b18; color: #fff; font-size: clamp(1.5rem, 3vw, 2.7rem); font-weight: 800; }
     .result.empty { align-items: center; color: var(--muted); text-align: center; }
     .result-label { margin-bottom: 4px; color: var(--primary); font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
     .box-id { margin: 0 0 13px; color: var(--ink); font-size: clamp(2rem, 7vw, 3.8rem); line-height: 1; letter-spacing: -.05em; overflow-wrap: anywhere; }
@@ -112,13 +122,14 @@
     body.fullscreen-mode .app { width: 100%; min-height: 100vh; padding: 14px; }
     body.fullscreen-mode header,
     body.fullscreen-mode .grid > .card:first-child,
-    body.fullscreen-mode .grid > .card:nth-child(3),
     body.fullscreen-mode > .app > section:last-of-type,
     body.fullscreen-mode footer { display: none; }
     body.fullscreen-mode .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
     body.fullscreen-mode .grid > .card:nth-child(2) { display: block; min-height: 0; }
     body.fullscreen-mode .reader-shell { max-width: 900px; margin: 0 auto; }
     body.fullscreen-mode #reader video { max-height: 52vh; }
+    body.fullscreen-mode .grid > .card:nth-child(3) { display: block; }
+    body.fullscreen-mode .grid > .card:nth-child(3) h2 { display: none; }
     body.fullscreen-mode .grid > .card:nth-child(2)::before { content: "Tela cheia de leitura"; display: block; margin-bottom: 10px; color: var(--primary); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #263617; }
     .overall-progress .progress-row { margin-bottom: 9px; }
@@ -445,7 +456,7 @@
       const normalizedCode = normalize(code);
       await prepareAudio();
       if (!state.barcodeMap.size) {
-        result.className = "result empty";
+        result.className = "result scan-result error";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
         setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
         await playScanSound("error");
@@ -455,8 +466,8 @@
       }
       const item = state.barcodeMap.get(normalizedCode);
       if (!item) {
-        result.className = "result empty";
-        result.textContent = "Código não encontrado na lista carregada.";
+        result.className = "result scan-result error";
+        result.innerHTML = '<strong>CÓDIGO NÃO ENCONTRADO</strong><span>Este código não existe na lista carregada.</span>';
         setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
         await playScanSound("error");
         $("manualCode").value = "";
@@ -472,7 +483,7 @@
       if (state.scannedCodes.has(normalizedCode)) {
         const scannedTotal = state.scannedByBox.get(item.boxId) || 0;
         const remaining = Math.max(item.quantity - scannedTotal, 0);
-        result.className = "result";
+        result.className = "result scan-result duplicate";
         result.innerHTML = '<div class="result-label">Código já conferido</div>' +
           '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
           '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
@@ -495,7 +506,7 @@
       const scannedTotal = state.scannedByBox.get(item.boxId);
       const remaining = Math.max(item.quantity - scannedTotal, 0);
       renderBoxProgress();
-      result.className = "result";
+      result.className = "result scan-result success";
       result.innerHTML = '<div class="result-label">Guardar na caixa</div>' +
         '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
         '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
