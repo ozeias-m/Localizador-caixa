@@ -107,6 +107,19 @@
     .box-progress-item.open .box-pieces { display: grid; gap: 7px; }
     .box-piece { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; color: var(--muted); font-size: .82rem; }
     .box-piece-code { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    #fullscreenToggle { margin-top: 10px; }
+    body.fullscreen-mode { overflow: hidden; }
+    body.fullscreen-mode .app { width: 100%; min-height: 100vh; padding: 14px; }
+    body.fullscreen-mode header,
+    body.fullscreen-mode .grid > .card:first-child,
+    body.fullscreen-mode .grid > .card:nth-child(3),
+    body.fullscreen-mode > .app > section:last-of-type,
+    body.fullscreen-mode footer { display: none; }
+    body.fullscreen-mode .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    body.fullscreen-mode .grid > .card:nth-child(2) { display: block; min-height: 0; }
+    body.fullscreen-mode .reader-shell { max-width: 900px; margin: 0 auto; }
+    body.fullscreen-mode #reader video { max-height: 52vh; }
+    body.fullscreen-mode .grid > .card:nth-child(2)::before { content: "Tela cheia de leitura"; display: block; margin-bottom: 10px; color: var(--primary); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #263617; }
     .overall-progress .progress-row { margin-bottom: 9px; }
     footer { margin-top: 22px; color: var(--muted); text-align: center; font-size: .8rem; }
@@ -170,6 +183,7 @@
           <button id="stopCamera" class="secondary" type="button" disabled>Parar</button>
         </div>
         <button id="enableAudio" class="secondary" type="button" style="margin-top: 10px">Ativar som</button>
+        <button id="fullscreenToggle" class="secondary" type="button">Tela cheia de leitura</button>
         <form id="manualForm" class="manual-form">
           <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite ou use leitor USB" aria-label="Código de barras">
           <button type="submit">Buscar</button>
@@ -456,9 +470,17 @@
         state.lastCameraRead = now;
       }
       if (state.scannedCodes.has(normalizedCode)) {
-        result.className = "result empty";
-        result.innerHTML = '<strong>Código já conferido</strong><span>Esta peça já foi registrada na Caixa ' +
-          escapeHtml(String(item.boxNumber)) + ' (ID: ' + escapeHtml(item.boxId) + ').</span>';
+        const scannedTotal = state.scannedByBox.get(item.boxId) || 0;
+        const remaining = Math.max(item.quantity - scannedTotal, 0);
+        result.className = "result";
+        result.innerHTML = '<div class="result-label">Código já conferido</div>' +
+          '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
+          '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
+          '<div class="quantity">Peças lidas: <strong>' + scannedTotal + '</strong></div>' +
+          '<div class="quantity">Faltam: <strong>' + remaining + '</strong> peças</div>' +
+          '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div>';
+        result.querySelector(".box-number").textContent = item.boxNumber;
+        result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
         setMessage($("scanMessage"), "Aviso: este código já foi conferido na Caixa " + item.boxNumber +
           " (ID: " + item.boxId + ") e não será contado novamente.", true);
         await playScanSound("duplicate");
@@ -742,6 +764,20 @@
     });
     $("startCamera").addEventListener("click", startCamera);
     $("stopCamera").addEventListener("click", stopCamera);
+    $("fullscreenToggle").addEventListener("click", async () => {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+        document.body.classList.add("fullscreen-mode");
+        $("fullscreenToggle").textContent = "Sair da tela cheia";
+      } else if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      const active = Boolean(document.fullscreenElement);
+      document.body.classList.toggle("fullscreen-mode", active);
+      $("fullscreenToggle").textContent = active ? "Sair da tela cheia" : "Tela cheia de leitura";
+    });
     $("enableAudio").addEventListener("click", async () => {
       const enabled = await prepareAudio();
       if (enabled) {
