@@ -119,17 +119,37 @@
     .box-piece-code { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     #fullscreenToggle { margin-top: 10px; }
     body.fullscreen-mode { overflow: hidden; }
-    body.fullscreen-mode .app { width: 100%; min-height: 100vh; padding: 14px; }
+    body.fullscreen-mode .app { width: 100%; height: 100dvh; min-height: 0; overflow: hidden; padding: 8px; }
     body.fullscreen-mode header,
     body.fullscreen-mode .grid > .card:first-child,
     body.fullscreen-mode > .app > section:last-of-type,
     body.fullscreen-mode footer { display: none; }
-    body.fullscreen-mode .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    body.fullscreen-mode .grid > .card:nth-child(2) { display: block; min-height: 0; }
+    body.fullscreen-mode .grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; height: calc(100dvh - 16px); }
+    body.fullscreen-mode .grid > .card { min-height: 0; overflow: hidden; padding: 10px; border-radius: 12px; }
+    body.fullscreen-mode .grid > .card:nth-child(2) { display: block; }
     body.fullscreen-mode .reader-shell { max-width: 900px; margin: 0 auto; }
-    body.fullscreen-mode #reader video { max-height: 52vh; }
+    body.fullscreen-mode #reader { min-height: 0; }
+    body.fullscreen-mode #reader video { max-height: 28vh; }
+    body.fullscreen-mode .card h2 { margin-bottom: 2px; font-size: 1rem; }
+    body.fullscreen-mode .card-intro { margin-bottom: 5px; font-size: .75rem; }
+    body.fullscreen-mode .controls { margin-top: 5px; }
+    body.fullscreen-mode #enableAudio,
+    body.fullscreen-mode #fullscreenToggle { margin-top: 4px !important; padding: 7px 10px; font-size: .78rem; }
+    body.fullscreen-mode .manual-form { gap: 6px; margin-top: 6px; }
+    body.fullscreen-mode input[type="text"] { padding: 8px 10px; font-size: .85rem; }
+    body.fullscreen-mode .manual-form button { padding: 8px 11px; font-size: .85rem; }
+    body.fullscreen-mode #scanMessage { min-height: 0; margin: 5px 0 0; padding: 6px 8px; font-size: clamp(.85rem, 2.5vw, 1.2rem); }
     body.fullscreen-mode .grid > .card:nth-child(3) { display: block; }
     body.fullscreen-mode .grid > .card:nth-child(3) h2 { display: none; }
+    body.fullscreen-mode .result.scan-result { min-height: 0; height: 100%; padding: 10px 14px; }
+    body.fullscreen-mode .result.scan-result .result-label { font-size: clamp(.8rem, 2vw, 1.2rem); }
+    body.fullscreen-mode .result.scan-result .box-id { margin-bottom: 5px; font-size: clamp(2rem, 9vw, 4.5rem); }
+    body.fullscreen-mode .result.scan-result .original-box { margin: -2px 0 5px; font-size: .75rem; }
+    body.fullscreen-mode .result.scan-result .quantity { font-size: clamp(.85rem, 2.5vw, 1.25rem); }
+    body.fullscreen-mode .result.scan-result .quantity strong { font-size: clamp(1.2rem, 4vw, 2rem); }
+    body.fullscreen-mode .result.scan-result .scan-code { margin-top: 5px; font-size: clamp(.7rem, 2vw, 1rem); }
+    body.fullscreen-mode .result.scan-result.error { font-size: clamp(1.1rem, 3vw, 1.8rem); }
+    body.fullscreen-mode .grid > .card:nth-child(3) .result { min-height: 0; height: 100%; }
     body.fullscreen-mode .grid > .card:nth-child(2)::before { content: "Tela cheia de leitura"; display: block; margin-bottom: 10px; color: var(--primary); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .overall-progress { margin: 18px 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #263617; }
     .overall-progress .progress-row { margin-bottom: 9px; }
