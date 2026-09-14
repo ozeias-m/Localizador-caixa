@@ -118,6 +118,7 @@
     .box-piece-group { display: grid; gap: 6px; }
     .box-piece-group-title { margin-top: 5px; color: var(--primary); font-size: .8rem; font-weight: 800; text-transform: uppercase; }
     .box-piece { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; color: var(--muted); font-size: .82rem; }
+    .box-piece small { display: block; margin-top: 3px; color: #d9e7b5; font-size: .78rem; }
     .box-piece.checked { color: #b9ed8a; }
     .box-piece.checked .box-piece-code { color: #b9ed8a; }
     .box-piece-status { color: var(--primary); font-weight: 800; text-transform: uppercase; }
@@ -251,7 +252,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-v2";
+    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v3";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
@@ -437,7 +438,7 @@
         const renderPieceGroup = (title, group, isChecked) => group.length
           ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
             group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
-              '<span>' + escapeHtml(piece.description || "Sem descrição") + '</span><span><span class="box-piece-status">' +
+              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Cor: ' + escapeHtml(piece.color || "Não informada") + '</small></span><span><span class="box-piece-status">' +
               (isChecked ? "Conferida" : "Em aberto") + '</span> · <span class="box-piece-code">' + escapeHtml(piece.barcode) + '</span></span></div>').join("") +
             '</div>'
           : "";
@@ -633,7 +634,11 @@
           boxCounts.set(boxId, (boxCounts.get(boxId) || 0) + 1);
           if (!boxNumbers.has(boxId)) boxNumbers.set(boxId, boxNumbers.size + 1);
           if (!boxPieces.has(boxId)) boxPieces.set(boxId, []);
-          boxPieces.get(boxId).push({ description: pieceDescription, barcode: barcode });
+          boxPieces.get(boxId).push({
+            description: pieceDescription,
+            color: normalize(row[4]),
+            barcode: barcode
+          });
           if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
         });
         setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
