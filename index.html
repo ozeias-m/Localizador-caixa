@@ -87,6 +87,8 @@
     .lot-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .lot-tab { border: 1px solid var(--line); color: var(--muted); background: #172d1d; font-size: .85rem; }
     .lot-tab.active { border-color: var(--primary); color: #12200d; background: var(--primary); }
+    .saved-backups { margin-top: 15px; border-top: 1px solid var(--line); padding-top: 12px; }
+    .saved-backups h4 { margin: 0 0 8px; color: var(--muted); font-size: .82rem; }
     .message.error { border-radius: 9px; padding: 10px 12px; color: var(--danger); background: var(--danger-bg); }
     #scanMessage { font-size: clamp(1.35rem, 2.7vw, 2.35rem); font-weight: 800; line-height: 1.15; }
     .result { min-height: 184px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: #263617; }
@@ -205,8 +207,13 @@
           <button id="resetLot" class="secondary" type="button" disabled>Zerar lote atual</button>
         </div>
         <div id="savedLots" class="saved-lots" hidden>
-          <h3>Arquivos importados e conferências salvas</h3>
+          <h3>Arquivos usados anteriormente</h3>
+          <p class="message">Clique em um arquivo para restaurar e continuar a conferência.</p>
           <div id="lotTabs" class="lot-tabs"></div>
+          <div id="savedBackups" class="saved-backups" hidden>
+            <h4>Backups criados antes de zerar</h4>
+            <div id="backupTabs" class="lot-tabs"></div>
+          </div>
         </div>
       </div>
 
@@ -326,9 +333,11 @@
       const filteredLots = Object.fromEntries(
         Object.entries(lots).filter(([, lot]) => lot.filterVersion === LOT_FILTER_VERSION)
       );
+      const backups = (data.backups || []).filter((backup) => backup.lot && backup.lot.filterVersion === LOT_FILTER_VERSION);
       return {
         activeLotId: filteredLots[data.activeLotId] ? data.activeLotId : "",
-        lots: filteredLots
+        lots: filteredLots,
+        backups
       };
     }
 
@@ -358,9 +367,20 @@
       }
     }
 
+    function archiveCurrentLot(data) {
+      const backup = {
+        id: "backup-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+        fileName: state.lotName || $("fileName").textContent,
+        archivedAt: Date.now(),
+        lot: serializeCurrentLot()
+      };
+      data.backups = [backup].concat(data.backups || []).slice(0, 20);
+    }
+
     function renderSavedLots(data) {
       const lotIds = Object.keys(data.lots || {});
-      $("savedLots").hidden = !lotIds.length;
+      const backups = data.backups || [];
+      $("savedLots").hidden = !lotIds.length && !backups.length;
       $("lotTabs").innerHTML = "";
       lotIds.sort((first, second) => (data.lots[second].updatedAt || 0) - (data.lots[first].updatedAt || 0));
       lotIds.forEach((lotId) => {
@@ -371,6 +391,16 @@
         button.dataset.lotId = lotId;
         button.textContent = lot.fileName || "Lote salvo";
         $("lotTabs").appendChild(button);
+      });
+      $("savedBackups").hidden = !backups.length;
+      $("backupTabs").innerHTML = "";
+      backups.forEach((backup) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lot-tab";
+        button.dataset.backupId = backup.id;
+        button.textContent = (backup.fileName || "Lote") + " (antes de zerar)";
+        $("backupTabs").appendChild(button);
       });
     }
 
@@ -792,6 +822,18 @@
         applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
       }
     });
+    $("backupTabs").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-backup-id]");
+      if (!button) return;
+      if (state.scanning) await stopCamera();
+      const data = getStoredData();
+      const backup = data.backups.find((item) => item.id === button.dataset.backupId);
+      if (!backup) return;
+      data.activeLotId = state.lotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      data.lots[data.activeLotId] = backup.lot;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      applyLot(data.activeLotId, backup.lot, "Backup restaurado. Você pode continuar a conferência anterior.");
+    });
     function toggleBoxDetails(item) {
       const isOpen = item.classList.toggle("open");
       item.setAttribute("aria-expanded", String(isOpen));
@@ -810,6 +852,8 @@
     $("resetLot").addEventListener("click", () => {
       if (!state.lotId || !state.barcodeMap.size) return;
       if (!window.confirm("Zerar as peças conferidas deste lote? O arquivo continuará salvo para uso posterior.")) return;
+      const data = getStoredData();
+      archiveCurrentLot(data);
       state.scannedByBox = new Map();
       state.scannedCodes = new Set();
       state.lastCameraCode = "";
@@ -818,7 +862,10 @@
       $("result").textContent = "Aguardando o próximo código.";
       setMessage($("loadMessage"), "Conferência zerada. O lote continua disponível nas abas salvas.", false);
       renderBoxProgress();
-      saveState();
+      data.activeLotId = state.lotId;
+      data.lots[state.lotId] = serializeCurrentLot();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      renderSavedLots(data);
     });
     $("manualForm").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -854,7 +901,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=3").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=4").catch(() => {});
     }
     restoreState();
   </script>
