@@ -81,8 +81,9 @@
     button.secondary:hover { background: #d3eae5; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
-    .view-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: var(--muted); font-size: .88rem; font-weight: 700; }
-    .view-mode select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--ink); background: #fff; font: inherit; }
+    .view-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: #d8f0dc; font-size: .88rem; font-weight: 700; }
+    .view-mode select { border: 2px solid #6f9f36; border-radius: 8px; padding: 8px 10px; color: #102318; background: #f4fff5; font: inherit; font-weight: 700; }
+    .view-mode option { color: #102318; background: #f4fff5; }
     .lot-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
     .saved-lots { margin-top: 18px; }
     .saved-lots h3 { margin: 0 0 9px; font-size: .95rem; }
@@ -271,7 +272,7 @@
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
     const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v5";
-    const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode";
+    const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode-v2";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
@@ -873,7 +874,7 @@
         applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
       }
     });
-    $("boxViewMode").value = localStorage.getItem(BOX_VIEW_MODE_KEY) || "grouped";
+    $("boxViewMode").value = localStorage.getItem(BOX_VIEW_MODE_KEY) || "all";
     $("boxViewMode").addEventListener("change", () => {
       localStorage.setItem(BOX_VIEW_MODE_KEY, $("boxViewMode").value);
       renderBoxProgress();
@@ -957,7 +958,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=7").catch(() => {});
     }
     restoreState();
   </script>
