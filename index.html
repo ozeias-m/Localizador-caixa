@@ -81,6 +81,8 @@
     button.secondary:hover { background: #d3eae5; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
+    .view-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: var(--muted); font-size: .88rem; font-weight: 700; }
+    .view-mode select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--ink); background: #fff; font: inherit; }
     .lot-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
     .saved-lots { margin-top: 18px; }
     .saved-lots h3 { margin: 0 0 9px; font-size: .95rem; }
@@ -109,6 +111,9 @@
     .quantity strong { color: var(--ink); font-size: 1.6rem; }
     .scan-code { margin: 13px 0 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
+    .box-group { display: grid; gap: 10px; }
+    .box-group-title { margin-top: 10px; border-bottom: 1px solid var(--line); padding: 8px 2px; color: var(--primary); font-size: .95rem; font-weight: 800; }
+    .box-group-title small { color: var(--muted); font-size: .78rem; font-weight: 600; }
     .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #263617; }
     .box-progress-item { cursor: pointer; }
     .box-progress-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: .9rem; }
@@ -244,6 +249,12 @@
     <section class="card" style="margin-top: 20px">
       <h2>Conferência das caixas</h2>
       <p class="card-intro">Acompanhe o progresso de cada caixa conforme as peças forem lidas.</p>
+      <label class="view-mode" for="boxViewMode">Visualização das caixas
+        <select id="boxViewMode">
+          <option value="grouped">Separar por ambiente/cliente</option>
+          <option value="all">Todas as caixas em sequência</option>
+        </select>
+      </label>
       <div class="overall-progress">
         <div class="progress-row"><span id="overallProgressLabel">Progresso geral</span><strong id="overallProgressPercent">0%</strong></div>
         <progress id="overallProgress" value="0" max="100" aria-label="Progresso geral da conferência">0%</progress>
@@ -259,7 +270,8 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v4";
+    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v5";
+    const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
@@ -458,7 +470,7 @@
         list.innerHTML = '<p class="message">Carregue o CSV para visualizar as caixas.</p>';
         return;
       }
-      list.innerHTML = state.boxes.map((box) => {
+      const renderBox = (box) => {
         const scanned = state.scannedByBox.get(box.id) || 0;
         const percent = box.quantity ? Math.round((scanned / box.quantity) * 100) : 0;
         const done = scanned >= box.quantity;
@@ -481,6 +493,27 @@
           '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
           '<div class="box-pieces"><div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
           '</div>';
+      };
+      if ($("boxViewMode").value === "all") {
+        list.innerHTML = state.boxes.map(renderBox).join("");
+        return;
+      }
+      const groups = [];
+      const groupsByKey = new Map();
+      state.boxes.forEach((box) => {
+        const key = box.groupKey || "Sem ambiente/cliente";
+        if (!groupsByKey.has(key)) {
+          groupsByKey.set(key, []);
+          groups.push({ key: key, boxes: groupsByKey.get(key) });
+        }
+        groupsByKey.get(key).push(box);
+      });
+      list.innerHTML = groups.map((group) => {
+        const first = group.boxes[0].number;
+        const last = group.boxes[group.boxes.length - 1].number;
+        const range = first === last ? "Caixa " + first : "Caixas " + first + " a " + last;
+        return '<div class="box-group"><div class="box-group-title">' + escapeHtml(group.key) +
+          ' <small>(' + range + ')</small></div>' + group.boxes.map(renderBox).join("") + '</div>';
       }).join("");
     }
 
@@ -600,6 +633,8 @@
       const boxCounts = new Map();
       const boxNumbers = new Map();
       const boxPieces = new Map();
+      const boxGroups = new Map();
+      const groupOrder = [];
       let pieces = 0;
       let invalidRows = 0;
       let filteredRows = 0;
@@ -620,14 +655,26 @@
           setMessage($("loadMessage"), "Nenhuma linha com \"montagem\" na coluna G e códigos válidos nas colunas H e I foi encontrada.", true);
           return;
         }
-        map.forEach((item) => { item.quantity = boxCounts.get(item.boxId); });
+        let nextBoxNumber = 1;
+        groupOrder.forEach((groupKey) => {
+          const groupBoxes = Array.from(boxGroups.entries()).filter(([, value]) => value === groupKey);
+          groupBoxes.forEach(([boxId]) => {
+            boxNumbers.set(boxId, nextBoxNumber);
+            nextBoxNumber += 1;
+          });
+        });
+        map.forEach((item) => {
+          item.quantity = boxCounts.get(item.boxId);
+          item.boxNumber = boxNumbers.get(item.boxId);
+        });
         state.barcodeMap = map;
         state.boxes = Array.from(boxNumbers.entries()).map(([id, number]) => ({
           id: id,
           number: number,
+          groupKey: boxGroups.get(id) || "Sem ambiente/cliente",
           quantity: boxCounts.get(id),
           pieces: boxPieces.get(id) || []
-        }));
+        })).sort((first, second) => first.number - second.number);
         state.pieces = pieces;
         $("pieceCount").textContent = pieces.toLocaleString("pt-BR");
         $("boxCount").textContent = new Set(Array.from(map.values(), (item) => item.boxId)).size.toLocaleString("pt-BR");
@@ -660,9 +707,13 @@
           const barcode = normalize(row[7]);
           const boxId = normalize(row[8]);
           if (!barcode || !boxId) { invalidRows += 1; return; }
+          const groupKey = normalize(row[9]) || "Sem ambiente/cliente";
           pieces += 1;
           boxCounts.set(boxId, (boxCounts.get(boxId) || 0) + 1);
-          if (!boxNumbers.has(boxId)) boxNumbers.set(boxId, boxNumbers.size + 1);
+          if (!boxGroups.has(boxId)) {
+            boxGroups.set(boxId, groupKey);
+            if (!groupOrder.includes(groupKey)) groupOrder.push(groupKey);
+          }
           if (!boxPieces.has(boxId)) boxPieces.set(boxId, []);
           boxPieces.get(boxId).push({
             description: pieceDescription,
@@ -822,6 +873,11 @@
         applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
       }
     });
+    $("boxViewMode").value = localStorage.getItem(BOX_VIEW_MODE_KEY) || "grouped";
+    $("boxViewMode").addEventListener("change", () => {
+      localStorage.setItem(BOX_VIEW_MODE_KEY, $("boxViewMode").value);
+      renderBoxProgress();
+    });
     $("backupTabs").addEventListener("click", async (event) => {
       const button = event.target.closest("[data-backup-id]");
       if (!button) return;
@@ -901,7 +957,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=5").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
     }
     restoreState();
   </script>
