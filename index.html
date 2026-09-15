@@ -259,7 +259,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v3";
+    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v4";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
@@ -273,7 +273,7 @@
     }
 
     function normalizeDescription(value) {
-      return normalize(value).toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return normalize(value).toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
     }
 
     function prepareAudio() {
@@ -653,7 +653,7 @@
             return;
           }
           const pieceDescription = normalize(row[5]);
-          if (normalizeDescription(pieceDescription) === "regua p/ porta provencal") {
+          if (normalizeDescription(pieceDescription).includes("regua p/ porta provencal")) {
             excludedRows += 1;
             return;
           }
@@ -901,7 +901,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=4").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=5").catch(() => {});
     }
     restoreState();
   </script>
