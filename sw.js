@@ -1,4 +1,4 @@
-const CACHE_NAME = "localizador-caixas-v9";
+﻿const CACHE_NAME = "localizador-caixas-v9";
 const APP_FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {

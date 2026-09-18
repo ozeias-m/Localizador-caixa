@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -203,9 +203,9 @@
     <header>
       <div>
         <div class="brand"><img src="logo.png" alt="Silo Movelaria"></div>
-        <div class="eyebrow">OPERA뿯½뿯½O DE SEPARA뿯½뿯½O</div>
+        <div class="eyebrow">OPERAÇÃO DE SEPARAÇÃO</div>
         <h1>Localizador de caixas</h1>
-        <p class="subtitle">Leia o c뿯½digo da pe뿯½a e descubra rapidamente em qual caixa guard뿯½-la.</p>
+        <p class="subtitle">Leia o código da peça e descubra rapidamente em qual caixa guardá-la.</p>
       </div>
       <div id="dataStatus" class="status-pill">Aguardando CSV</div>
     </header>
@@ -213,15 +213,15 @@
     <section class="grid">
       <div class="card">
         <h2>1. Carregue a lista</h2>
-        <p class="card-intro">Selecione o arquivo sem cabe뿯½alho e separado por ponto-e-v뿯½rgula.</p>
+        <p class="card-intro">Selecione o arquivo sem cabeçalho e separado por ponto-e-vírgula.</p>
         <label class="upload-box" for="csvFile">
           <strong>Escolher Lote</strong>
-          <span>O arquivo 뿯½ processado apenas neste navegador.</span>
+          <span>O arquivo é processado apenas neste navegador.</span>
           <span id="fileName" class="file-name">Nenhum arquivo selecionado</span>
           <input id="csvFile" type="file" accept=".csv,text/csv">
         </label>
         <div class="stats" aria-live="polite">
-          <div class="stat"><b id="pieceCount">0</b><span>pe뿯½as carregadas</span></div>
+          <div class="stat"><b id="pieceCount">0</b><span>peças carregadas</span></div>
           <div class="stat"><b id="boxCount">0</b><span>caixas encontradas</span></div>
         </div>
         <div class="progress-wrap" aria-live="polite">
@@ -231,11 +231,11 @@
         <p id="loadMessage" class="message">Carregue o CSV para liberar a busca.</p>
         <div class="lot-actions">
           <button id="resetLot" class="secondary" type="button" disabled>Zerar lote atual</button>
-          <button id="exportReport" class="secondary" type="button" disabled>Exportar relat뿯½rio</button>
+          <button id="exportReport" class="secondary" type="button" disabled>Exportar relatório</button>
         </div>
         <div id="savedLots" class="saved-lots" hidden>
           <h3>Arquivos usados anteriormente</h3>
-          <p class="message">Clique em um arquivo para restaurar e continuar a confer뿯½ncia.</p>
+          <p class="message">Clique em um arquivo para restaurar e continuar a conferência.</p>
           <div id="lotTabs" class="lot-tabs"></div>
           <div id="savedBackups" class="saved-backups" hidden>
             <h4>Backups criados antes de zerar</h4>
@@ -245,19 +245,19 @@
       </div>
 
       <div class="card">
-        <h2>2. Leia o c뿯½digo</h2>
-        <p class="card-intro">Use a c뿯½mera traseira ou digite o c뿯½digo manualmente.</p>
+        <h2>2. Leia o código</h2>
+        <p class="card-intro">Use a câmera traseira ou digite o código manualmente.</p>
         <div class="reader-shell">
-          <div id="reader"><div class="camera-placeholder">A c뿯½mera ser뿯½ exibida aqui quando voc뿯½ iniciar o leitor.</div></div>
+          <div id="reader"><div class="camera-placeholder">A câmera será exibida aqui quando você iniciar o leitor.</div></div>
         </div>
         <div class="controls">
-          <button id="startCamera" type="button">Iniciar c뿯½mera</button>
+          <button id="startCamera" type="button">Iniciar câmera</button>
           <button id="stopCamera" class="secondary" type="button" disabled>Parar</button>
         </div>
         <button id="enableAudio" class="secondary" type="button" style="margin-top: 10px">Ativar som</button>
         <button id="fullscreenToggle" class="secondary" type="button">Tela cheia de leitura</button>
         <form id="manualForm" class="manual-form">
-          <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite ou use leitor USB" aria-label="C뿯½digo de barras">
+          <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite ou use leitor USB" aria-label="Código de barras">
           <button type="submit">Buscar</button>
         </form>
         <p id="scanMessage" class="message" aria-live="polite"></p>
@@ -265,22 +265,22 @@
 
       <div class="card" style="grid-column: 1 / -1">
         <h2>Resultado</h2>
-        <div id="result" class="result empty" aria-live="polite">O resultado da leitura aparecer뿯½ aqui.</div>
+        <div id="result" class="result empty" aria-live="polite">O resultado da leitura aparecerá aqui.</div>
       </div>
     </section>
     <section class="card" style="margin-top: 20px">
-      <h2>Confer뿯½ncia das caixas</h2>
-      <p class="card-intro">Acompanhe o progresso de cada caixa conforme as pe뿯½as forem lidas.</p>
-      <label class="view-mode" for="boxViewMode">Visualiza뿯½뿯½o das caixas
+      <h2>Conferência das caixas</h2>
+      <p class="card-intro">Acompanhe o progresso de cada caixa conforme as peças forem lidas.</p>
+      <label class="view-mode" for="boxViewMode">Visualização das caixas
         <select id="boxViewMode">
           <option value="grouped">Separar por ambiente/cliente</option>
-          <option value="all">Todas as caixas em sequ뿯½ncia</option>
+          <option value="all">Todas as caixas em sequência</option>
         </select>
       </label>
       <div class="overall-progress">
         <div class="progress-row"><span id="overallProgressLabel">Progresso geral</span><strong id="overallProgressPercent">0%</strong></div>
-        <progress id="overallProgress" value="0" max="100" aria-label="Progresso geral da confer뿯½ncia">0%</progress>
-        <div class="box-progress-meta"><span id="overallScanned">0 pe뿯½as conferidas</span><span id="overallRemaining">0 pe뿯½as faltando</span></div>
+        <progress id="overallProgress" value="0" max="100" aria-label="Progresso geral da conferência">0%</progress>
+        <div class="box-progress-meta"><span id="overallScanned">0 peças conferidas</span><span id="overallRemaining">0 peças faltando</span></div>
       </div>
       <div id="boxProgressList" class="box-progress-list">
         <p class="message">Carregue o CSV para visualizar as caixas.</p>
@@ -312,21 +312,21 @@
 
     function normalizeColorValue(value) {
       const text = String(value == null ? "" : value).trim().replace(/\s+/g, " ");
-      if (!text) return "N뿯½o informada";
+      if (!text) return "Não informada";
 
       const mojibakeMap = {
-        "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½",
-        "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½",
-        "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯₽": "뿯½",
-        "뿯½‰": "뿯½", "뿯½뿯½": "뿯½", "뿯½“": "뿯½", "뿯½š": "뿯½", "뿯½‡": "뿯½",
-        "뿯½œ": "뿯½", "뿯½‘": "뿯½", "뿯½뿯½": "뿯½", "뿯½뿯½": "뿯½", "뿯½Ÿ": "뿯½",
-        "뿯½\u00a0": "뿯½", "뿯½\u00a1": "뿯½", "뿯½\u00a2": "뿯½", "뿯½\u00a3": "뿯½",
-        "뿯½\u00a4": "뿯½", "뿯½\u00a5": "뿯½", "뿯½\u00a7": "뿯½", "뿯½\u00a8": "뿯½",
-        "뿯½\u00a9": "뿯½", "뿯½\u00aa": "뿯½", "뿯½\u00ab": "뿯½", "뿯½\u00ad": "뿯½",
-        "뿯½\u00ae": "뿯½", "뿯½\u00af": "뿯½", "뿯½\u00b1": "뿯½", "뿯½\u00b2": "뿯½",
-        "뿯½\u00b3": "뿯½", "뿯½\u00b4": "뿯½", "뿯½\u00b5": "뿯½", "뿯½\u00b6": "뿯½",
-        "뿯½\u00b8": "뿯½", "뿯½\u00b9": "뿯½", "뿯½\u00ba": "뿯½", "뿯½\u00bb": "뿯½",
-        "뿯½\u00bc": "뿯½", "뿯½\u00bd": "뿯½", "뿯½\u00be": "뿯½", "뿯½\u00bf": "뿯½"
+        "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú",
+        "Ã£": "ã", "Ãµ": "õ", "Ã¢": "â", "Ãª": "ê", "Ã´": "ô",
+        "Ã§": "ç", "Ã¼": "ü", "Ã±": "ñ", "Ã": "Á", "Ã€": "À",
+        "Ã‰": "É", "Ã": "Í", "Ã“": "Ó", "Ãš": "Ú", "Ã‡": "Ç",
+        "Ãœ": "Ü", "Ã‘": "Ñ", "Ã¤": "ä", "Ã¶": "ö", "ÃŸ": "ß",
+        "Ã\u00a0": "à", "Ã\u00a1": "á", "Ã\u00a2": "â", "Ã\u00a3": "ã",
+        "Ã\u00a4": "ä", "Ã\u00a5": "å", "Ã\u00a7": "ç", "Ã\u00a8": "è",
+        "Ã\u00a9": "é", "Ã\u00aa": "ê", "Ã\u00ab": "ë", "Ã\u00ad": "í",
+        "Ã\u00ae": "î", "Ã\u00af": "ï", "Ã\u00b1": "ñ", "Ã\u00b2": "ò",
+        "Ã\u00b3": "ó", "Ã\u00b4": "ô", "Ã\u00b5": "õ", "Ã\u00b6": "ö",
+        "Ã\u00b8": "ø", "Ã\u00b9": "ù", "Ã\u00ba": "ú", "Ã\u00bb": "û",
+        "Ã\u00bc": "ü", "Ã\u00bd": "ý", "Ã\u00be": "þ", "Ã\u00bf": "ÿ"
       };
 
       let repaired = text;
@@ -334,8 +334,8 @@
         repaired = repaired.split(wrong).join(correct);
       });
       repaired = repaired
-        .replace(/뿯½/g, "")
-        .replace(/뿯½/g, "")
+        .replace(/Ã/g, "")
+        .replace(/Â/g, "")
         .replace(/[\^~`]+/g, " ")
         .replace(/\uFFFD/g, " ")
         .normalize("NFD")
@@ -344,7 +344,7 @@
         .replace(/\s+/g, " ")
         .trim();
 
-      return repaired || "N뿯½o informada";
+      return repaired || "Não informada";
     }
 
     function prepareAudio() {
@@ -434,7 +434,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         renderSavedLots(data);
       } catch (error) {
-        setMessage($("loadMessage"), "A lista foi carregada, mas n뿯½o foi poss뿯½vel mant뿯½-la salva neste navegador.", true);
+        setMessage($("loadMessage"), "A lista foi carregada, mas não foi possível mantê-la salva neste navegador.", true);
       }
     }
 
@@ -457,22 +457,22 @@
 
     function exportReport() {
       if (!state.boxes.length) {
-        setMessage($("loadMessage"), "Carregue um CSV antes de exportar o relat뿯½rio.", true);
+        setMessage($("loadMessage"), "Carregue um CSV antes de exportar o relatório.", true);
         return;
       }
       const rows = [
-        ["Caixa", "ID da caixa", "Ambiente/Cliente", "Quantidade total", "Pe뿯½as conferidas", "Faltando", "Status"],
+        ["Caixa", "ID da caixa", "Ambiente/Cliente", "Quantidade total", "Peças conferidas", "Faltando", "Status"],
         ...state.boxes.map((box) => {
           const scanned = state.scannedByBox.get(box.id) || 0;
           const remaining = Math.max((box.quantity || 0) - scanned, 0);
-          const status = remaining === 0 ? "Conclu뿯½da" : "Em andamento";
+          const status = remaining === 0 ? "Concluída" : "Em andamento";
           return [box.number, box.id, box.groupKey || "Sem ambiente/cliente", box.quantity || 0, scanned, remaining, status];
         })
       ];
       const csv = rows.map((row) => row.map(escapeCsv).join(";")).join("\n");
       const filename = (state.lotName || "relatorio-caixas").replace(/\.[^/.]+$/, "") + "-relatorio.csv";
       downloadFile(filename, '\uFEFF' + csv, "text/csv;charset=utf-8;");
-      setMessage($("loadMessage"), "Relat뿯½rio exportado com sucesso. O arquivo foi baixado em CSV.", false);
+      setMessage($("loadMessage"), "Relatório exportado com sucesso. O arquivo foi baixado em CSV.", false);
     }
 
     function archiveCurrentLot(data) {
@@ -528,9 +528,9 @@
       $("resetLot").disabled = false;
       $("exportReport").disabled = false;
       updateProgress(100, "Arquivo carregado");
-      setMessage($("loadMessage"), restoredMessage || "Lista carregada. Voc뿯½ j뿯½ pode iniciar a leitura.", false);
+      setMessage($("loadMessage"), restoredMessage || "Lista carregada. Você já pode iniciar a leitura.", false);
       $("result").className = "result empty";
-      $("result").textContent = "Aguardando o pr뿯½ximo c뿯½digo.";
+      $("result").textContent = "Aguardando o próximo código.";
       renderBoxProgress();
       renderSavedLots(getStoredData());
     }
@@ -541,7 +541,7 @@
         const lotIds = Object.keys(data.lots);
         if (!lotIds.length) return;
         const activeLotId = data.activeLotId && data.lots[data.activeLotId] ? data.activeLotId : lotIds[0];
-        applyLot(activeLotId, data.lots[activeLotId], "Lote restaurado automaticamente. Voc뿯½ pode continuar a confer뿯½ncia.");
+        applyLot(activeLotId, data.lots[activeLotId], "Lote restaurado automaticamente. Você pode continuar a conferência.");
         renderSavedLots(data);
       } catch (error) {
         localStorage.removeItem(STORAGE_KEY);
@@ -561,8 +561,8 @@
       const overallPercent = state.pieces ? Math.round((scannedTotal / state.pieces) * 100) : 0;
       $("overallProgress").value = overallPercent;
       $("overallProgressPercent").textContent = overallPercent + "%";
-      $("overallScanned").textContent = scannedTotal.toLocaleString("pt-BR") + " pe뿯½as conferidas";
-      $("overallRemaining").textContent = Math.max(state.pieces - scannedTotal, 0).toLocaleString("pt-BR") + " pe뿯½as faltando";
+      $("overallScanned").textContent = scannedTotal.toLocaleString("pt-BR") + " peças conferidas";
+      $("overallRemaining").textContent = Math.max(state.pieces - scannedTotal, 0).toLocaleString("pt-BR") + " peças faltando";
       if (!state.boxes || !state.boxes.length) {
         list.innerHTML = '<p class="message">Carregue o CSV para visualizar as caixas.</p>';
         return;
@@ -577,18 +577,18 @@
         const renderPieceGroup = (title, group, isChecked) => group.length
           ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
             group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
-              '<span><strong>' + escapeHtml(piece.description || "Sem descri뿯½뿯½o") + '</strong><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
-              (isChecked ? "Conferida" : "Em aberto") + '</span> 뿯½ <button type="button" class="box-piece-code-copy" data-copy-code="' + escapeHtml(piece.barcode) + '" aria-label="Copiar c뿯½digo ' + escapeHtml(piece.barcode) + '">' + escapeHtml(piece.barcode) + '</button></span></div>').join("") +
+              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
+              (isChecked ? "Conferida" : "Em aberto") + '</span> · <button type="button" class="box-piece-code-copy" data-copy-code="' + escapeHtml(piece.barcode) + '" aria-label="Copiar código ' + escapeHtml(piece.barcode) + '">' + escapeHtml(piece.barcode) + '</button></span></div>').join("") +
             '</div>'
           : "";
         const pieceList = pieces.length
           ? renderPieceGroup("Conferidas", checkedPieces, true) + renderPieceGroup("Em aberto", openPieces, false)
-          : '<div class="message">Este lote foi salvo antes da lista de pe뿯½as por caixa estar dispon뿯½vel. Importe o CSV novamente para visualizar os detalhes.</div>';
+          : '<div class="message">Este lote foi salvo antes da lista de peças por caixa estar disponível. Importe o CSV novamente para visualizar os detalhes.</div>';
         return '<div class="box-progress-item' + (done ? ' done' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="false">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
           '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
-          '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' pe뿯½as</span></div>' +
-          '<div class="box-pieces"><div class="box-progress-meta"><strong>Descri뿯½뿯½o</strong><strong>C뿯½digo</strong></div>' + pieceList + '</div>' +
+          '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
+          '<div class="box-pieces"><div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
           '</div>';
       };
       if ($("boxViewMode").value === "all") {
@@ -658,7 +658,7 @@
       if (!state.barcodeMap.size) {
         result.className = "result scan-result error";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
-        setMessage($("scanMessage"), "뿯½ necess뿯½rio carregar a lista primeiro.", true);
+        setMessage($("scanMessage"), "É necessário carregar a lista primeiro.", true);
         await playScanSound("error");
         $("manualCode").value = "";
         if (!fromCamera) $("manualCode").focus();
@@ -667,8 +667,8 @@
       const item = state.barcodeMap.get(normalizedCode);
       if (!item) {
         result.className = "result scan-result error";
-        result.innerHTML = '<strong>C뿯½DIGO N뿯½O ENCONTRADO</strong><span>Este c뿯½digo n뿯½o existe na lista carregada.</span>';
-        setMessage($("scanMessage"), "Nenhuma pe뿯½a corresponde ao c뿯½digo informado.", true);
+        result.innerHTML = '<strong>CÓDIGO NÃO ENCONTRADO</strong><span>Este código não existe na lista carregada.</span>';
+        setMessage($("scanMessage"), "Nenhuma peça corresponde ao código informado.", true);
         await playScanSound("error");
         $("manualCode").value = "";
         if (!fromCamera) $("manualCode").focus();
@@ -684,16 +684,16 @@
         const scannedTotal = state.scannedByBox.get(item.boxId) || 0;
         const remaining = Math.max(item.quantity - scannedTotal, 0);
         result.className = "result scan-result duplicate";
-        result.innerHTML = '<div class="result-label">C뿯½digo j뿯½ conferido</div>' +
+        result.innerHTML = '<div class="result-label">Código já conferido</div>' +
           '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
-          '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> pe뿯½as</div>' +
-          '<div class="quantity">Pe뿯½as lidas: <strong>' + scannedTotal + '</strong></div>' +
-          '<div class="quantity">Faltam: <strong>' + remaining + '</strong> pe뿯½as</div>' +
-          '<div class="scan-code">C뿯½digo lido: ' + escapeHtml(normalizedCode) + '</div>';
+          '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
+          '<div class="quantity">Peças lidas: <strong>' + scannedTotal + '</strong></div>' +
+          '<div class="quantity">Faltam: <strong>' + remaining + '</strong> peças</div>' +
+          '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div>';
         result.querySelector(".box-number").textContent = item.boxNumber;
         result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
-        setMessage($("scanMessage"), "Aviso: este c뿯½digo j뿯½ foi conferido na Caixa " + item.boxNumber +
-          " (ID: " + item.boxId + ") e n뿯½o ser뿯½ contado novamente.", true);
+        setMessage($("scanMessage"), "Aviso: este código já foi conferido na Caixa " + item.boxNumber +
+          " (ID: " + item.boxId + ") e não será contado novamente.", true);
         await playScanSound("duplicate");
         $("manualCode").value = "";
         if (!fromCamera) $("manualCode").focus();
@@ -709,13 +709,13 @@
       result.className = "result scan-result success";
       result.innerHTML = '<div class="result-label">Guardar na caixa</div>' +
         '<h3 class="box-id">Caixa <span class="box-number"></span></h3>' +
-        '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> pe뿯½as</div>' +
-        '<div class="quantity">Pe뿯½as lidas: <strong>' + scannedTotal + '</strong></div>' +
-        '<div class="quantity">Faltam: <strong>' + remaining + '</strong> pe뿯½as</div>' +
-        '<div class="scan-code">C뿯½digo lido: ' + escapeHtml(normalizedCode) + '</div>';
+        '<div class="original-box"></div><div class="quantity">Total da caixa: <strong>' + item.quantity + '</strong> peças</div>' +
+        '<div class="quantity">Peças lidas: <strong>' + scannedTotal + '</strong></div>' +
+        '<div class="quantity">Faltam: <strong>' + remaining + '</strong> peças</div>' +
+        '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div>';
       result.querySelector(".box-number").textContent = item.boxNumber;
       result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
-      setMessage($("scanMessage"), remaining ? "Pe뿯½a registrada. Ainda faltam " + remaining + " pe뿯½as nesta caixa." : "Caixa finalizada! Todas as pe뿯½as foram registradas.", false);
+      setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
       await playScanSound("success");
       $("manualCode").value = "";
       if (!fromCamera) $("manualCode").focus();
@@ -750,8 +750,8 @@
       const finish = () => {
         if (!map.size) {
           $("exportReport").disabled = true;
-          updateProgress(100, "Processamento conclu뿯½do");
-          setMessage($("loadMessage"), "Nenhuma linha com \"montagem\" na coluna G e c뿯½digos v뿯½lidos nas colunas H e I foi encontrada.", true);
+          updateProgress(100, "Processamento concluído");
+          setMessage($("loadMessage"), "Nenhuma linha com \"montagem\" na coluna G e códigos válidos nas colunas H e I foi encontrada.", true);
           return;
         }
         let nextBoxNumber = 1;
@@ -780,13 +780,13 @@
         $("dataStatus").textContent = "CSV pronto para consulta";
         $("dataStatus").classList.add("ready");
         updateProgress(100, "Arquivo carregado");
-        const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas inv뿯½lidas ignoradas." : "";
+        const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas inválidas ignoradas." : "";
         const filterSummary = " Filtro da coluna G: montagem; " + filteredRows.toLocaleString("pt-BR") +
           " linhas fora do filtro e " + excludedRows.toLocaleString("pt-BR") +
-          " itens \"Regua p/ Porta Proven뿯½al\" ignorados.";
-        setMessage($("loadMessage"), "Lista carregada. Voc뿯½ j뿯½ pode iniciar a leitura." + filterSummary + warning, false);
+          " itens \"Regua p/ Porta Provençal\" ignorados.";
+        setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + filterSummary + warning, false);
         $("result").className = "result empty";
-        $("result").textContent = "Aguardando o pr뿯½ximo c뿯½digo.";
+        $("result").textContent = "Aguardando o próximo código.";
         $("resetLot").disabled = false;
         $("exportReport").disabled = false;
         renderBoxProgress();
@@ -822,7 +822,7 @@
           });
           if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
         });
-        setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " pe뿯½as lidas.", false);
+        setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
       };
       if (typeof Papa === "undefined") {
         parseCsvWithoutLibrary(file, (rows) => { processRows(rows); finish(); });
@@ -837,13 +837,13 @@
         chunkSize: 1024 * 1024,
         chunk: (parsed) => {
           if (parsed.errors.length) {
-            setMessage($("loadMessage"), "N뿯½o foi poss뿯½vel ler o CSV: " + parsed.errors[0].message, true);
+            setMessage($("loadMessage"), "Não foi possível ler o CSV: " + parsed.errors[0].message, true);
             return;
           }
           processRows(parsed.data);
           const percent = file.size ? (parsed.meta.cursor / file.size) * 100 : 100;
           updateProgress(percent, "Lendo arquivo...");
-          setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " pe뿯½as lidas.", false);
+          setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
         },
         complete: finish,
         error: (error) => {
@@ -858,7 +858,7 @@
       await prepareAudio();
       await playScanSound("ready");
       if (!window.Html5Qrcode) {
-        setMessage($("scanMessage"), "A biblioteca da c뿯½mera n뿯½o foi carregada. Use a busca manual.", true);
+        setMessage($("scanMessage"), "A biblioteca da câmera não foi carregada. Use a busca manual.", true);
         return;
       }
       try {
@@ -921,7 +921,7 @@
             }
           }
         }
-        if (!state.scanner) throw lastError || new Error("C뿯½mera indispon뿯½vel");
+        if (!state.scanner) throw lastError || new Error("Câmera indisponível");
         state.scanning = true;
         $("startCamera").disabled = true;
         $("stopCamera").disabled = false;
@@ -930,14 +930,14 @@
             advanced: [{ focusMode: "continuous" }]
           });
         } catch (error) {
-          // Alguns navegadores n뿯½o exp뿯½em controle de foco pela c뿯½mera web.
+          // Alguns navegadores não expõem controle de foco pela câmera web.
         }
-        setMessage($("scanMessage"), "C뿯½mera ativa. Mantenha a etiqueta inteira na faixa verde, bem iluminada e sem reflexo.", false);
+        setMessage($("scanMessage"), "Câmera ativa. Mantenha a etiqueta inteira na faixa verde, bem iluminada e sem reflexo.", false);
       } catch (error) {
         state.scanner = null;
         const detail = error && error.message ? " (" + error.message + ")" : "";
-        setMessage($("scanMessage"), "N뿯½o foi poss뿯½vel iniciar a c뿯½mera neste aparelho. Confira se o navegador tem acesso 뿯½ c뿯½mera e tente novamente." + detail, true);
-        $("reader").innerHTML = '<div class="camera-placeholder">C뿯½mera indispon뿯½vel. Voc뿯½ ainda pode digitar o c뿯½digo.</div>';
+        setMessage($("scanMessage"), "Não foi possível iniciar a câmera neste aparelho. Confira se o navegador tem acesso à câmera e tente novamente." + detail, true);
+        $("reader").innerHTML = '<div class="camera-placeholder">Câmera indisponível. Você ainda pode digitar o código.</div>';
       }
     }
 
@@ -949,7 +949,7 @@
       state.scanning = false;
       $("startCamera").disabled = false;
       $("stopCamera").disabled = true;
-      $("reader").innerHTML = '<div class="camera-placeholder">A c뿯½mera foi pausada.</div>';
+      $("reader").innerHTML = '<div class="camera-placeholder">A câmera foi pausada.</div>';
     }
 
     $("csvFile").addEventListener("change", (event) => {
@@ -970,7 +970,7 @@
       if (lot) {
         data.activeLotId = button.dataset.lotId;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Voc뿯½ pode continuar a confer뿯½ncia.");
+        applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
       }
     });
     $("boxViewMode").value = localStorage.getItem(BOX_VIEW_MODE_KEY) || "all";
@@ -988,7 +988,7 @@
       data.activeLotId = state.lotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
       data.lots[data.activeLotId] = backup.lot;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      applyLot(data.activeLotId, backup.lot, "Backup restaurado. Voc뿯½ pode continuar a confer뿯½ncia anterior.");
+      applyLot(data.activeLotId, backup.lot, "Backup restaurado. Você pode continuar a conferência anterior.");
     });
     function copyBoxPieceCode(code) {
       const text = normalize(code);
@@ -1006,15 +1006,15 @@
       };
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text)
-          .then(() => setMessage($("scanMessage"), "C뿯½digo " + text + " copiado para a 뿯½rea de transfer뿯½ncia.", false))
+          .then(() => setMessage($("scanMessage"), "Código " + text + " copiado para a área de transferência.", false))
           .catch(() => {
             fallbackCopy();
-            setMessage($("scanMessage"), "C뿯½digo " + text + " copiado para a 뿯½rea de transfer뿯½ncia.", false);
+            setMessage($("scanMessage"), "Código " + text + " copiado para a área de transferência.", false);
           });
         return;
       }
       fallbackCopy();
-      setMessage($("scanMessage"), "C뿯½digo " + text + " copiado para a 뿯½rea de transfer뿯½ncia.", false);
+      setMessage($("scanMessage"), "Código " + text + " copiado para a área de transferência.", false);
     }
     function toggleBoxDetails(item) {
       const isOpen = item.classList.toggle("open");
@@ -1045,7 +1045,7 @@
     });
     $("resetLot").addEventListener("click", () => {
       if (!state.lotId || !state.barcodeMap.size) return;
-      if (!window.confirm("Zerar as pe뿯½as conferidas deste lote? O arquivo continuar뿯½ salvo para uso posterior.")) return;
+      if (!window.confirm("Zerar as peças conferidas deste lote? O arquivo continuará salvo para uso posterior.")) return;
       const data = getStoredData();
       archiveCurrentLot(data);
       state.scannedByBox = new Map();
@@ -1053,8 +1053,8 @@
       state.lastCameraCode = "";
       state.lastCameraRead = 0;
       $("result").className = "result empty";
-      $("result").textContent = "Aguardando o pr뿯½ximo c뿯½digo.";
-      setMessage($("loadMessage"), "Confer뿯½ncia zerada. O lote continua dispon뿯½vel nas abas salvas.", false);
+      $("result").textContent = "Aguardando o próximo código.";
+      setMessage($("loadMessage"), "Conferência zerada. O lote continua disponível nas abas salvas.", false);
       renderBoxProgress();
       data.activeLotId = state.lotId;
       data.lots[state.lotId] = serializeCurrentLot();
@@ -1088,9 +1088,9 @@
       if (enabled) {
         await playScanSound("ready");
         $("enableAudio").textContent = "Som ativado";
-        setMessage($("scanMessage"), "Som ativado. O navegador emitir뿯½ sinais nas leituras.", false);
+        setMessage($("scanMessage"), "Som ativado. O navegador emitirá sinais nas leituras.", false);
       } else {
-        setMessage($("scanMessage"), "N뿯½o foi poss뿯½vel ativar o som neste navegador.", true);
+        setMessage($("scanMessage"), "Não foi possível ativar o som neste navegador.", true);
       }
     });
     window.addEventListener("pagehide", saveState);
