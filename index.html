@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -289,6 +291,18 @@
       return normalize(value).toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
     }
 
+    function normalizeColorValue(value) {
+      const text = String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+      if (!text) return "Não informada";
+      return text
+        .replace(/[\^~`]+/g, " ")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9\s\/\-\(\)\[\]\.]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() || "Não informada";
+    }
+
     function prepareAudio() {
       if (!window.AudioContext && !window.webkitAudioContext) return Promise.resolve(false);
       if (!state.audioContext) {
@@ -481,7 +495,7 @@
         const renderPieceGroup = (title, group, isChecked) => group.length
           ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
             group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
-              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Cor: ' + escapeHtml(piece.color || "Não informada") + '</small></span><span><span class="box-piece-status">' +
+              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
               (isChecked ? "Conferida" : "Em aberto") + '</span> · <span class="box-piece-code">' + escapeHtml(piece.barcode) + '</span></span></div>').join("") +
             '</div>'
           : "";
@@ -718,7 +732,7 @@
           if (!boxPieces.has(boxId)) boxPieces.set(boxId, []);
           boxPieces.get(boxId).push({
             description: pieceDescription,
-            color: normalize(row[4]),
+            color: normalizeColorValue(row[4]),
             barcode: barcode
           });
           if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
@@ -964,3 +978,4 @@
   </script>
 </body>
 </html>
+>>>>>>> 0f9f397 (Ajusta normalização de nomes de cor)

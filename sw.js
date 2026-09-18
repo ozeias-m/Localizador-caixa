@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 const CACHE_NAME = "localizador-caixas-v7";
 const APP_FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
@@ -27,3 +29,4 @@ self.addEventListener("fetch", (event) => {
     }).catch(() => caches.match(event.request))
   );
 });
+>>>>>>> 0f9f397 (Ajusta normalização de nomes de cor)
