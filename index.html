@@ -116,7 +116,11 @@
     .scan-code { margin: 13px 0 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-group { display: grid; gap: 10px; }
-    .box-group-title { margin-top: 10px; border-bottom: 1px solid var(--line); padding: 8px 2px; color: var(--primary); font-size: .95rem; font-weight: 800; }
+    .box-group.collapsed > .box-group-boxes { display: none; }
+    .box-group-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; margin-top: 10px; border: 0; border-bottom: 1px solid var(--line); padding: 8px 2px; color: var(--primary); background: transparent; font: inherit; font-size: .95rem; font-weight: 800; text-align: left; cursor: pointer; }
+    .box-group-title:hover, .box-group-title:focus-visible { border-bottom-color: var(--primary); outline: none; }
+    .box-group-title::after { content: "▸"; color: var(--muted); font-size: 1.15rem; }
+    .box-group:not(.collapsed) > .box-group-title::after { content: "▾"; }
     .box-group-title small { color: var(--muted); font-size: .78rem; font-weight: 600; }
     .box-progress-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #263617; }
     .box-progress-item { cursor: pointer; }
@@ -622,8 +626,8 @@
         const first = group.boxes[0].number;
         const last = group.boxes[group.boxes.length - 1].number;
         const range = first === last ? "Caixa " + first : "Caixas " + first + " a " + last;
-        return '<div class="box-group"><div class="box-group-title">' + escapeHtml(group.key) +
-          ' <small>(' + range + ')</small></div>' + group.boxes.map(renderBox).join("") + '</div>';
+        return '<div class="box-group collapsed"><button type="button" class="box-group-title" aria-expanded="false">' + escapeHtml(group.key) +
+          ' <small>(' + range + ')</small></button><div class="box-group-boxes">' + group.boxes.map(renderBox).join("") + '</div></div>';
       }).join("");
     }
 
@@ -1039,6 +1043,13 @@
       if (copyButton) {
         event.stopPropagation();
         copyBoxPieceCode(copyButton.dataset.copyCode);
+        return;
+      }
+      const groupTitle = event.target.closest(".box-group-title");
+      if (groupTitle) {
+        const group = groupTitle.closest(".box-group");
+        const isCollapsed = group.classList.toggle("collapsed");
+        groupTitle.setAttribute("aria-expanded", String(!isCollapsed));
         return;
       }
       const item = event.target.closest(".box-progress-item");
