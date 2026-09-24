@@ -72,8 +72,8 @@
     .camera-placeholder { display: grid; min-height: 125px; place-items: center; padding: 22px; color: #b7d1cd; text-align: center; font-size: .9rem; }
     .controls { display: flex; gap: 10px; margin-top: 15px; }
     .manual-form { display: flex; gap: 10px; margin-top: 18px; }
-    input[type="text"] { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 12px 13px; color: #000; background: #fff; font: inherit; }
-    input[type="text"]:focus { outline: 3px solid rgba(15,118,110,.16); border-color: var(--primary); }
+    input[type="text"], input[type="search"] { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 12px 13px; color: #000; background: #fff; font: inherit; }
+    input[type="text"]:focus, input[type="search"]:focus { outline: 3px solid rgba(15,118,110,.16); border-color: var(--primary); }
     button { border: 0; border-radius: 10px; padding: 11px 15px; color: #fff; background: var(--primary); font: inherit; font-weight: 700; cursor: pointer; transition: background .2s, transform .1s; }
     button:hover { background: var(--primary-dark); }
     button:active { transform: translateY(1px); }
@@ -84,6 +84,9 @@
     .view-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: #d8f0dc; font-size: .88rem; font-weight: 700; }
     .view-mode select { border: 2px solid #6f9f36; border-radius: 8px; padding: 8px 10px; color: #102318; background: #f4fff5; font: inherit; font-weight: 700; }
     .view-mode option { color: #102318; background: #f4fff5; }
+    .box-search { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+    .box-search label { color: #d8f0dc; font-size: .88rem; font-weight: 700; }
+    .box-search input { max-width: 360px; }
     .lot-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
     .saved-lots { margin-top: 18px; }
     .saved-lots h3 { margin: 0 0 9px; font-size: .95rem; }
@@ -277,6 +280,10 @@
           <option value="all">Todas as caixas em sequência</option>
         </select>
       </label>
+      <div class="box-search">
+        <label for="boxSearch">Pesquisar por ID</label>
+        <input id="boxSearch" type="search" autocomplete="off" placeholder="Digite o ID da caixa" aria-label="Pesquisar caixas por ID">
+      </div>
       <div class="overall-progress">
         <div class="progress-row"><span id="overallProgressLabel">Progresso geral</span><strong id="overallProgressPercent">0%</strong></div>
         <progress id="overallProgress" value="0" max="100" aria-label="Progresso geral da conferência">0%</progress>
@@ -567,6 +574,12 @@
         list.innerHTML = '<p class="message">Carregue o CSV para visualizar as caixas.</p>';
         return;
       }
+      const searchTerm = normalize($("boxSearch").value).toLocaleLowerCase();
+      const filteredBoxes = state.boxes.filter((box) => normalize(box.id).toLocaleLowerCase().includes(searchTerm));
+      if (!filteredBoxes.length) {
+        list.innerHTML = '<p class="message">Nenhuma caixa encontrada para o ID informado.</p>';
+        return;
+      }
       const renderBox = (box) => {
         const scanned = state.scannedByBox.get(box.id) || 0;
         const percent = box.quantity ? Math.round((scanned / box.quantity) * 100) : 0;
@@ -592,12 +605,12 @@
           '</div>';
       };
       if ($("boxViewMode").value === "all") {
-        list.innerHTML = state.boxes.map(renderBox).join("");
+        list.innerHTML = filteredBoxes.map(renderBox).join("");
         return;
       }
       const groups = [];
       const groupsByKey = new Map();
-      state.boxes.forEach((box) => {
+      filteredBoxes.forEach((box) => {
         const key = box.groupKey || "Sem ambiente/cliente";
         if (!groupsByKey.has(key)) {
           groupsByKey.set(key, []);
@@ -978,6 +991,7 @@
       localStorage.setItem(BOX_VIEW_MODE_KEY, $("boxViewMode").value);
       renderBoxProgress();
     });
+    $("boxSearch").addEventListener("input", renderBoxProgress);
     $("backupTabs").addEventListener("click", async (event) => {
       const button = event.target.closest("[data-backup-id]");
       if (!button) return;
