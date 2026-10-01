@@ -594,7 +594,8 @@
         const renderPieceGroup = (title, group, isChecked) => group.length
           ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
             group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
-              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
+              '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Comprimento: ' + escapeHtml(normalize(piece.length) || "Não informado") +
+              ' · Largura: ' + escapeHtml(normalize(piece.width) || "Não informada") + '</small><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
               (isChecked ? "Conferida" : "Em aberto") + '</span> · <button type="button" class="box-piece-code-copy" data-copy-code="' + escapeHtml(piece.barcode) + '" aria-label="Copiar código ' + escapeHtml(piece.barcode) + '">' + escapeHtml(piece.barcode) + '</button></span></div>').join("") +
             '</div>'
           : "";
@@ -835,6 +836,8 @@
           boxPieces.get(boxId).push({
             description: pieceDescription,
             color: normalizeColorValue(row[4]),
+            length: normalize(row[2]),
+            width: normalize(row[3]),
             barcode: barcode
           });
           if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
@@ -1121,7 +1124,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=9").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=12").catch(() => {});
     }
     restoreState();
   </script>
