@@ -82,6 +82,7 @@
     button:disabled { opacity: .55; cursor: not-allowed; }
     .message { min-height: 24px; margin: 14px 0 0; color: var(--muted); font-size: .9rem; }
     .view-mode { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: #d8f0dc; font-size: .88rem; font-weight: 700; }
+    .message.warning { border-radius: 9px; padding: 10px 12px; color: #f1c75b; background: #493817; }
     .view-mode select { border: 2px solid #6f9f36; border-radius: 8px; padding: 8px 10px; color: #102318; background: #f4fff5; font: inherit; font-weight: 700; }
     .view-mode option { color: #102318; background: #f4fff5; }
     .box-search { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
@@ -362,9 +363,10 @@
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
 
-    function setMessage(element, text, isError) {
+    function setMessage(element, text, isError, isWarning) {
       element.textContent = text || "";
       element.classList.toggle("error", Boolean(isError));
+      element.classList.toggle("warning", Boolean(isWarning));
     }
 
     function normalize(value) {
@@ -477,9 +479,72 @@
       };
     }
 
+    function isStorageQuotaError(error) {
+      return Boolean(error && (
+        error.name === "QuotaExceededError" ||
+        error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+        error.code === 22 ||
+        error.code === 1014
+      ));
+    }
+
+    function persistStoredData(data, protectedLotIds) {
+      const protectedIds = new Set(protectedLotIds || []);
+      const write = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      try {
+        write();
+        return { removedBackups: 0, removedLots: 0 };
+      } catch (error) {
+        if (!isStorageQuotaError(error)) throw error;
+      }
+
+      let removedBackups = 0;
+      let removedLots = 0;
+      while (data.backups && data.backups.length) {
+        data.backups.pop();
+        removedBackups += 1;
+        try {
+          write();
+          return { removedBackups, removedLots };
+        } catch (error) {
+          if (!isStorageQuotaError(error)) throw error;
+        }
+      }
+
+      const olderLots = Object.entries(data.lots || {})
+        .filter(([lotId]) => !protectedIds.has(lotId))
+        .sort((first, second) => (first[1].updatedAt || 0) - (second[1].updatedAt || 0));
+      for (const [lotId] of olderLots) {
+        delete data.lots[lotId];
+        removedLots += 1;
+        try {
+          write();
+          return { removedBackups, removedLots };
+        } catch (error) {
+          if (!isStorageQuotaError(error)) throw error;
+        }
+      }
+
+      throw new DOMException("Não há espaço suficiente no armazenamento do navegador.", "QuotaExceededError");
+    }
+
+    function setStorageCleanupMessage(result, savedMessage) {
+      if (!result.removedBackups && !result.removedLots) {
+        setMessage($("loadMessage"), savedMessage, false);
+        return;
+      }
+      const removed = [];
+      if (result.removedBackups) removed.push(result.removedBackups + " backup(s) antigo(s)");
+      if (result.removedLots) removed.push(result.removedLots + " lote(s) anterior(es)");
+      setMessage($("loadMessage"), "Lote salvo. Para liberar espaço, removemos " + removed.join(" e ") + ".", false, true);
+    }
+
     function serializeCurrentLot() {
+      const pieceCodes = new Set();
+      state.boxes.forEach((box) => (box.pieces || []).forEach((piece) => pieceCodes.add(normalize(piece.barcode))));
+      const barcodeMapCanBeRebuilt = Array.from(state.barcodeMap.keys()).every((code) => pieceCodes.has(code));
       return {
-        barcodeMap: Array.from(state.barcodeMap.entries()),
+        barcodeMap: barcodeMapCanBeRebuilt ? undefined : Array.from(state.barcodeMap.entries()),
         scannedByBox: Array.from(state.scannedByBox.entries()),
         scannedCodes: Array.from(state.scannedCodes),
         boxes: state.boxes,
@@ -494,12 +559,18 @@
       if (!state.lotId || !state.barcodeMap.size) return;
       try {
         const data = getStoredData();
+        const previouslyActiveLotId = data.activeLotId;
         data.activeLotId = state.lotId;
         data.lots[state.lotId] = serializeCurrentLot();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        const result = persistStoredData(data, [state.lotId, previouslyActiveLotId]);
         renderSavedLots(data);
+        if (result.removedBackups || result.removedLots) setStorageCleanupMessage(result, "");
       } catch (error) {
-        setMessage($("loadMessage"), "A lista foi carregada, mas não foi possível mantê-la salva neste navegador.", true);
+        console.error("Não foi possível salvar o lote no armazenamento local.", error);
+        const text = isStorageQuotaError(error)
+          ? "CSV carregado, mas o armazenamento do navegador continua cheio. O lote ficará disponível apenas até fechar esta aba; exporte o relatório e remova dados antigos do site."
+          : "A lista foi carregada, mas não foi possível mantê-la salva neste navegador.";
+        setMessage($("loadMessage"), text, true);
       }
     }
 
@@ -584,6 +655,16 @@
       state.scannedByBox = new Map(lot.scannedByBox || []);
       state.scannedCodes = new Set(lot.scannedCodes || []);
       state.boxes = lot.boxes || [];
+      if (!state.barcodeMap.size) {
+        state.boxes.forEach((box) => {
+          (box.pieces || []).forEach((piece) => {
+            const barcode = normalize(piece.barcode);
+            if (barcode && !state.barcodeMap.has(barcode)) {
+              state.barcodeMap.set(barcode, { boxId: box.id, boxNumber: box.number, quantity: box.quantity });
+            }
+          });
+        });
+      }
       state.pieces = Number(lot.pieces) || 0;
       $("fileName").textContent = state.lotName;
       $("pieceCount").textContent = state.pieces.toLocaleString("pt-BR");
@@ -1043,8 +1124,14 @@
       const lot = data.lots[button.dataset.lotId];
       if (lot) {
         data.activeLotId = button.dataset.lotId;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
+        try {
+          const result = persistStoredData(data, [button.dataset.lotId]);
+          applyLot(button.dataset.lotId, lot, "Lote anterior aberto. Você pode continuar a conferência.");
+          if (result.removedBackups || result.removedLots) setStorageCleanupMessage(result, "");
+        } catch (error) {
+          console.error("Não foi possível salvar a seleção do lote.", error);
+          setMessage($("loadMessage"), "Não foi possível salvar a seleção do lote neste navegador.", true);
+        }
       }
     });
     $("boxViewMode").value = localStorage.getItem(BOX_VIEW_MODE_KEY) || "all";
@@ -1062,8 +1149,14 @@
       if (!backup) return;
       data.activeLotId = state.lotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
       data.lots[data.activeLotId] = backup.lot;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      applyLot(data.activeLotId, backup.lot, "Backup restaurado. Você pode continuar a conferência anterior.");
+      try {
+        const result = persistStoredData(data, [data.activeLotId]);
+        applyLot(data.activeLotId, backup.lot, "Backup restaurado. Você pode continuar a conferência anterior.");
+        if (result.removedBackups || result.removedLots) setStorageCleanupMessage(result, "");
+      } catch (error) {
+        console.error("Não foi possível salvar o backup restaurado.", error);
+        setMessage($("loadMessage"), "O backup foi aberto nesta aba, mas não foi possível salvá-lo neste navegador.", true);
+      }
     });
     function copyBoxPieceCode(code) {
       const text = normalize(code);
@@ -1136,12 +1229,17 @@
       state.lastCameraRead = 0;
       $("result").className = "result empty";
       $("result").textContent = "Aguardando o próximo código.";
-      setMessage($("loadMessage"), "Conferência zerada. O lote continua disponível nas abas salvas.", false);
       renderBoxProgress();
       data.activeLotId = state.lotId;
       data.lots[state.lotId] = serializeCurrentLot();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      renderSavedLots(data);
+      try {
+        const result = persistStoredData(data, [state.lotId]);
+        renderSavedLots(data);
+        setStorageCleanupMessage(result, "Conferência zerada. O lote continua disponível nas abas salvas.");
+      } catch (error) {
+        console.error("Não foi possível salvar a conferência zerada.", error);
+        setMessage($("loadMessage"), "A conferência foi zerada nesta aba, mas não foi possível salvá-la no navegador.", true);
+      }
     });
     $("exportReport").addEventListener("click", exportReport);
     $("manualForm").addEventListener("submit", async (event) => {
@@ -1178,7 +1276,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=14").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=15").catch(() => {});
     }
     restoreState();
   </script>
