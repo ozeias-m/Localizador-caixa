@@ -377,6 +377,7 @@
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
     const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v5";
+    const BOX_IDENTITY_VERSION = 2;
     const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode-v2";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
     const $ = (id) => document.getElementById(id);
@@ -581,6 +582,7 @@
         pieces: state.pieces,
         fileName: state.lotName || $("fileName").textContent,
         filterVersion: LOT_FILTER_VERSION,
+        boxIdentityVersion: BOX_IDENTITY_VERSION,
         updatedAt: Date.now()
       };
     }
@@ -632,7 +634,7 @@
           const scanned = state.scannedByBox.get(box.id) || 0;
           const remaining = Math.max((box.quantity || 0) - scanned, 0);
           const status = remaining === 0 ? "Concluída" : "Em andamento";
-          return [box.number, box.id, box.groupKey || "Sem ambiente/cliente", box.quantity || 0, scanned, remaining, status];
+          return [box.number, box.displayId || box.id, box.groupKey || "Sem ambiente/cliente", box.quantity || 0, scanned, remaining, status];
         })
       ];
       const csv = rows.map((row) => row.map(escapeCsv).join(";")).join("\n");
@@ -659,21 +661,25 @@
       lotIds.sort((first, second) => (data.lots[second].updatedAt || 0) - (data.lots[first].updatedAt || 0));
       lotIds.forEach((lotId) => {
         const lot = data.lots[lotId];
+        const compatible = lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lot-tab" + (lotId === state.lotId ? " active" : "");
         button.dataset.lotId = lotId;
-        button.textContent = lot.fileName || "Lote salvo";
+        button.disabled = !compatible;
+        button.textContent = (lot.fileName || "Lote salvo") + (compatible ? "" : " (Reimporte o CSV)");
         $("lotTabs").appendChild(button);
       });
       $("savedBackups").hidden = !backups.length;
       $("backupTabs").innerHTML = "";
       backups.forEach((backup) => {
+        const compatible = backup.lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lot-tab";
         button.dataset.backupId = backup.id;
-        button.textContent = (backup.fileName || "Lote") + " (antes de zerar)";
+        button.disabled = !compatible;
+        button.textContent = (backup.fileName || "Lote") + (compatible ? " (antes de zerar)" : " (Reimporte o CSV)");
         $("backupTabs").appendChild(button);
       });
     }
@@ -691,7 +697,13 @@
           (box.pieces || []).forEach((piece) => {
             const barcode = normalize(piece.barcode);
             if (barcode && !state.barcodeMap.has(barcode)) {
-              state.barcodeMap.set(barcode, { boxId: box.id, boxNumber: box.number, quantity: box.quantity });
+              state.barcodeMap.set(barcode, {
+                boxId: box.id,
+                displayBoxId: box.displayId || box.id,
+                groupKey: box.groupKey || "Sem ambiente/cliente",
+                boxNumber: box.number,
+                quantity: box.quantity
+              });
             }
           });
         });
@@ -717,8 +729,15 @@
       try {
         const data = getStoredData();
         const lotIds = Object.keys(data.lots);
-        if (!lotIds.length) return;
-        const activeLotId = data.activeLotId && data.lots[data.activeLotId] ? data.activeLotId : lotIds[0];
+        const compatibleLotIds = lotIds.filter((lotId) => data.lots[lotId].boxIdentityVersion === BOX_IDENTITY_VERSION);
+        if (!compatibleLotIds.length) {
+          if (lotIds.length) {
+            renderSavedLots(data);
+            setMessage($("loadMessage"), "O agrupamento das caixas foi atualizado. Reimporte o CSV para separar caixas com o mesmo ID em ambientes diferentes.", true);
+          }
+          return;
+        }
+        const activeLotId = data.activeLotId && compatibleLotIds.includes(data.activeLotId) ? data.activeLotId : compatibleLotIds[0];
         applyLot(activeLotId, data.lots[activeLotId], "Lote restaurado automaticamente. Você pode continuar a conferência.");
         renderSavedLots(data);
       } catch (error) {
@@ -746,7 +765,7 @@
         return;
       }
       const searchTerm = normalize($("boxSearch").value).toLocaleLowerCase();
-      const filteredBoxes = state.boxes.filter((box) => normalize(box.id).toLocaleLowerCase().includes(searchTerm));
+      const filteredBoxes = state.boxes.filter((box) => normalize(box.displayId || box.id).toLocaleLowerCase().includes(searchTerm));
       if (!filteredBoxes.length) {
         list.innerHTML = '<p class="message">Nenhuma caixa encontrada para o ID informado.</p>';
         return;
@@ -772,7 +791,7 @@
         return '<div class="box-progress-item' + (done ? ' done' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="false">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
           '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
-          '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
+          '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.displayId || box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
           '<div class="box-pieces"><div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
           '</div>';
       };
@@ -859,6 +878,9 @@
         prepareNextScan(fromCamera);
         return;
       }
+      const box = state.boxById.get(item.boxId);
+      const displayBoxId = item.displayBoxId || (box && box.displayId) || item.boxId;
+      const groupKey = item.groupKey || (box && box.groupKey) || "Sem ambiente/cliente";
       if (fromCamera) {
         const now = Date.now();
         if (normalizedCode === state.lastCameraCode && now - state.lastCameraRead < 1500) return;
@@ -877,9 +899,9 @@
           '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div></div>';
         updateMissingPiecesPanel(item.boxId);
         result.querySelector(".box-number").textContent = item.boxNumber;
-        result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
+        result.querySelector(".original-box").textContent = "ID: " + displayBoxId + " · " + groupKey;
         setMessage($("scanMessage"), "Aviso: este código já foi conferido na Caixa " + item.boxNumber +
-          " (ID: " + item.boxId + ") e não será contado novamente.", true);
+          " (ID: " + displayBoxId + " · " + groupKey + ") e não será contado novamente.", true);
         await playScanSound("duplicate");
         prepareNextScan(fromCamera);
         return;
@@ -900,7 +922,7 @@
         '<div class="scan-code">Código lido: ' + escapeHtml(normalizedCode) + '</div></div>';
       updateMissingPiecesPanel(item.boxId);
       result.querySelector(".box-number").textContent = item.boxNumber;
-      result.querySelector(".original-box").textContent = "ID original: " + item.boxId;
+      result.querySelector(".original-box").textContent = "ID: " + displayBoxId + " · " + groupKey;
       setMessage($("scanMessage"), remaining ? "Peça registrada. Ainda faltam " + remaining + " peças nesta caixa." : "Caixa finalizada! Todas as peças foram registradas.", false);
       await playScanSound("success");
       prepareNextScan(fromCamera);
@@ -943,6 +965,7 @@
       const boxNumbers = new Map();
       const boxPieces = new Map();
       const boxGroups = new Map();
+      const boxDisplayIds = new Map();
       const groupOrder = [];
       let pieces = 0;
       let invalidRows = 0;
@@ -980,6 +1003,7 @@
         state.barcodeMap = map;
         state.boxes = Array.from(boxNumbers.entries()).map(([id, number]) => ({
           id: id,
+          displayId: boxDisplayIds.get(id),
           number: number,
           groupKey: boxGroups.get(id) || "Sem ambiente/cliente",
           quantity: boxCounts.get(id),
@@ -988,7 +1012,7 @@
         state.boxById = new Map(state.boxes.map((box) => [box.id, box]));
         state.pieces = pieces;
         $("pieceCount").textContent = pieces.toLocaleString("pt-BR");
-        $("boxCount").textContent = new Set(Array.from(map.values(), (item) => item.boxId)).size.toLocaleString("pt-BR");
+        $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
         $("dataStatus").textContent = "CSV pronto para consulta";
         $("dataStatus").classList.add("ready");
         updateProgress(100, "Arquivo carregado");
@@ -1008,13 +1032,15 @@
           const pieceDescription = normalize(row[5]);
           if (normalizeDescription(pieceDescription).includes("regua p/ porta provencal")) return;
           const barcode = normalize(row[7]);
-          const boxId = normalize(row[8]);
-          if (!barcode || !boxId) { invalidRows += 1; return; }
+          const displayBoxId = normalize(row[8]);
+          if (!barcode || !displayBoxId) { invalidRows += 1; return; }
           const groupKey = normalize(row[9]) || "Sem ambiente/cliente";
+          const boxId = JSON.stringify([groupKey, displayBoxId]);
           pieces += 1;
           boxCounts.set(boxId, (boxCounts.get(boxId) || 0) + 1);
           if (!boxGroups.has(boxId)) {
             boxGroups.set(boxId, groupKey);
+            boxDisplayIds.set(boxId, displayBoxId);
             if (!groupOrder.includes(groupKey)) groupOrder.push(groupKey);
           }
           if (!boxPieces.has(boxId)) boxPieces.set(boxId, []);
@@ -1025,7 +1051,13 @@
             width: normalize(row[3]),
             barcode: barcode
           });
-          if (!map.has(barcode)) map.set(barcode, { boxId: boxId, boxNumber: boxNumbers.get(boxId), quantity: 0 });
+          if (!map.has(barcode)) map.set(barcode, {
+            boxId: boxId,
+            displayBoxId: displayBoxId,
+            groupKey: groupKey,
+            boxNumber: boxNumbers.get(boxId),
+            quantity: 0
+          });
         });
         setMessage($("loadMessage"), "Processando... " + pieces.toLocaleString("pt-BR") + " peças lidas.", false);
       };
@@ -1328,7 +1360,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=18").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
     }
     restoreState();
   </script>
