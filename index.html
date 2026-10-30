@@ -376,7 +376,7 @@
   <script>
     "use strict";
     const STORAGE_KEY = "localizador-caixas-state-v1";
-    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v6";
+    const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v7";
     const BOX_IDENTITY_VERSION = 2;
     const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode-v2";
     const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
@@ -733,7 +733,7 @@
         if (!compatibleLotIds.length) {
           if (lotIds.length) {
             renderSavedLots(data);
-            setMessage($("loadMessage"), "O agrupamento das caixas foi atualizado. Reimporte o CSV para separar caixas com o mesmo ID em ambientes diferentes.", true);
+            setMessage($("loadMessage"), "Os filtros das peças foram atualizados. Reimporte o CSV para aplicar as regras mais recentes.", true);
           }
           return;
         }
@@ -1033,7 +1033,7 @@
           const normalizedPieceDescription = normalizeDescription(pieceDescription);
           if (
             normalizedPieceDescription.includes("regua p/ porta provencal") ||
-            normalizedPieceDescription.includes("travessa porta almofada mdf c/ palha indiana")
+            normalizedPieceDescription.includes("travessa porta")
           ) return;
           const barcode = normalize(row[7]);
           const displayBoxId = normalize(row[8]);
