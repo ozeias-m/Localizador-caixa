@@ -121,6 +121,13 @@
     .missing-pieces ul { margin: 4px 0 0; padding-left: 18px; }
     .missing-pieces li { margin-top: 2px; overflow-wrap: anywhere; }
     #missingPiecesPanel { display: none; }
+    .auth-card { width: min(100% - 32px, 560px); margin: 40px auto; }
+    .auth-card h1 { margin-top: 0; }
+    .auth-card form { display: grid; gap: 12px; }
+    .auth-card label { display: grid; gap: 6px; color: var(--muted); font-weight: 700; }
+    .auth-card input { width: 100%; }
+    .auth-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    #cloudSessionStatus { color: var(--muted); font-size: .85rem; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-group { display: grid; gap: 10px; }
     .box-group.collapsed > .box-group-boxes { display: none; }
@@ -278,7 +285,26 @@
   </style>
 </head>
 <body>
-  <main class="app">
+  <section id="authPanel" class="card auth-card" aria-labelledby="authTitle">
+    <h1 id="authTitle">Localizador de caixas</h1>
+    <p class="card-intro">Entre para sincronizar as leituras e o histórico entre computadores.</p>
+    <form id="authForm">
+      <label for="authEmail">E-mail compartilhado
+        <input id="authEmail" type="email" autocomplete="username" required>
+      </label>
+      <label for="authPassword">Senha
+        <input id="authPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <div class="auth-actions">
+        <button id="authSubmit" type="submit">Entrar</button>
+        <button id="authSignOut" class="secondary" type="button" hidden>Sair</button>
+        <span id="cloudSessionStatus" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+    <p id="authMessage" class="message" aria-live="polite">Use o e-mail e a senha compartilhados criados no Supabase.</p>
+  </section>
+
+  <main id="appRoot" class="app" hidden>
     <header>
       <div>
         <div class="brand"><img src="logo.png" alt="Silo Movelaria"></div>
@@ -311,6 +337,7 @@
         <div class="lot-actions">
           <button id="resetLot" class="secondary" type="button" disabled>Zerar lote atual</button>
           <button id="exportReport" class="secondary" type="button" disabled>Exportar relatório</button>
+          <button id="migrateLocalHistory" class="secondary" type="button" hidden>Enviar histórico deste computador para a nuvem</button>
         </div>
         <div id="savedLots" class="saved-lots" hidden>
           <h3>Arquivos usados anteriormente</h3>
@@ -379,7 +406,10 @@
     const LOT_FILTER_VERSION = "coluna-g-montagem-sem-regua-cor-v7";
     const BOX_IDENTITY_VERSION = 2;
     const BOX_VIEW_MODE_KEY = "localizador-caixas-box-view-mode-v2";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null };
+    const SUPABASE_URL = "https://jpkkhuntkgbkfnicmivr.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cBLyza9hto-m366-6agP1g_UaAitSYR";
+    const CLOUD_SESSION_KEY = "localizador-caixas-cloud-session-v1";
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError, isWarning) {
@@ -390,6 +420,425 @@
 
     function normalize(value) {
       return String(value == null ? "" : value).trim();
+    }
+
+    function storeCloudSession(session) {
+      state.cloudSession = Object.assign({}, session, {
+        expires_at: session.expires_at || Math.floor(Date.now() / 1000) + (session.expires_in || 3600)
+      });
+      localStorage.setItem(CLOUD_SESSION_KEY, JSON.stringify(state.cloudSession));
+    }
+
+    function clearCloudSession() {
+      state.cloudSession = null;
+      state.cloudReadyForScans = false;
+      localStorage.removeItem(CLOUD_SESSION_KEY);
+      if (state.cloudRefreshTimer) {
+        clearInterval(state.cloudRefreshTimer);
+        state.cloudRefreshTimer = null;
+      }
+      $("appRoot").hidden = true;
+      $("authForm").hidden = false;
+      $("authSignOut").hidden = true;
+      $("cloudSessionStatus").textContent = "";
+      $("migrateLocalHistory").hidden = true;
+    }
+
+    async function cloudAuthRequest(path, body) {
+      const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.msg || result.message || result.error_description || "Não foi possível autenticar no Supabase.");
+      return result;
+    }
+
+    async function refreshCloudSession() {
+      if (!state.cloudSession || !state.cloudSession.refresh_token) {
+        clearCloudSession();
+        throw new Error("Sua sessão expirou. Entre novamente.");
+      }
+      try {
+        const session = await cloudAuthRequest("token?grant_type=refresh_token", {
+          refresh_token: state.cloudSession.refresh_token
+        });
+        storeCloudSession(session);
+      } catch (error) {
+        clearCloudSession();
+        throw error;
+      }
+    }
+
+    async function cloudApi(path, options, retry) {
+      if (!state.cloudSession) throw new Error("Entre no sistema para sincronizar os dados.");
+      if (state.cloudSession.expires_at <= Math.floor(Date.now() / 1000) + 30) {
+        await refreshCloudSession();
+      }
+      const settings = options || {};
+      const headers = Object.assign({
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: "Bearer " + state.cloudSession.access_token
+      }, settings.headers || {});
+      if (settings.body != null && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, Object.assign({}, settings, { headers: headers }));
+      if (response.status === 401 && retry !== false) {
+        await refreshCloudSession();
+        return cloudApi(path, settings, false);
+      }
+      const text = await response.text();
+      let result = null;
+      if (text) {
+        try {
+          result = JSON.parse(text);
+        } catch (error) {
+          result = text;
+        }
+      }
+      if (!response.ok) {
+        const detail = result && (result.message || result.details || result.hint) || "Erro HTTP " + response.status;
+        throw new Error(detail);
+      }
+      return result;
+    }
+
+    async function signInToCloud(email, password) {
+      const session = await cloudAuthRequest("token?grant_type=password", { email: email, password: password });
+      storeCloudSession(session);
+      await initializeCloudWorkspace();
+    }
+
+    async function signOutFromCloud() {
+      try {
+        if (state.cloudSession) {
+          const response = await fetch(SUPABASE_URL + "/auth/v1/logout?scope=local", {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: "Bearer " + state.cloudSession.access_token
+            }
+          });
+          if (!response.ok) throw new Error("Não foi possível encerrar a sessão no Supabase.");
+        }
+      } finally {
+        clearCloudSession();
+      }
+    }
+
+    async function initializeCloudAuth() {
+      const savedSession = localStorage.getItem(CLOUD_SESSION_KEY);
+      if (!savedSession) {
+        $("appRoot").hidden = true;
+        return;
+      }
+      try {
+        state.cloudSession = JSON.parse(savedSession);
+        if (state.cloudSession.expires_at <= Math.floor(Date.now() / 1000) + 30) {
+          await refreshCloudSession();
+        }
+        await initializeCloudWorkspace();
+      } catch (error) {
+        console.error("Não foi possível restaurar a sessão compartilhada.", error);
+        $("appRoot").hidden = true;
+        $("authForm").hidden = false;
+        $("authSignOut").hidden = true;
+        setMessage($("authMessage"), "Entre novamente para continuar: " + error.message, true);
+      }
+    }
+
+    function setCloudStatus(text, isError) {
+      $("cloudSessionStatus").textContent = text || "";
+      $("cloudSessionStatus").classList.toggle("error", Boolean(isError));
+    }
+
+    function getMigrateableLocalHistory() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return { lots: [], backups: [], skippedLots: 0, skippedBackups: 0 };
+      const data = JSON.parse(saved);
+      const localLots = Object.entries(data.lots || {});
+      const lots = localLots
+        .filter(([, lot]) => lot && lot.filterVersion === LOT_FILTER_VERSION &&
+          Number(lot.boxIdentityVersion) === BOX_IDENTITY_VERSION && Array.isArray(lot.boxes))
+        .map(([id, lot]) => ({ id: id, lot: lot }));
+      const localBackups = data.backups || [];
+      const backups = localBackups.filter((backup) =>
+        backup && backup.lot && backup.lot.filterVersion === LOT_FILTER_VERSION &&
+        Number(backup.lot.boxIdentityVersion) === BOX_IDENTITY_VERSION && Array.isArray(backup.lot.boxes)
+      );
+      return {
+        lots: lots,
+        backups: backups,
+        skippedLots: localLots.length - lots.length,
+        skippedBackups: localBackups.length - backups.length
+      };
+    }
+
+    function updateLocalHistoryMigrationButton() {
+      try {
+        const history = getMigrateableLocalHistory();
+        $("migrateLocalHistory").hidden = !state.cloudSession || (!history.lots.length && !history.backups.length);
+      } catch (error) {
+        console.error("Não foi possível verificar o histórico salvo neste computador.", error);
+        $("migrateLocalHistory").hidden = true;
+        setMessage($("loadMessage"), "Não foi possível verificar o histórico local para migração: " + error.message, true);
+      }
+    }
+
+    async function migrateLocalHistoryToCloud() {
+      const button = $("migrateLocalHistory");
+      button.disabled = true;
+      try {
+        const history = getMigrateableLocalHistory();
+        let lotsSent = 0;
+        let backupsSent = 0;
+        for (const entry of history.lots) {
+          await cloudApi("rpc/import_localizador_lot", {
+            method: "POST",
+            body: JSON.stringify({
+              p_lot: Object.assign({}, entry.lot, { id: entry.id })
+            })
+          });
+          lotsSent += 1;
+        }
+        for (const backup of history.backups) {
+          await cloudApi("rpc/import_localizador_backup", {
+            method: "POST",
+            body: JSON.stringify({ p_snapshot: backup.lot, p_source_id: backup.id })
+          });
+          backupsSent += 1;
+        }
+        await cloudRefreshIndex();
+        setMessage($("loadMessage"),
+          "Histórico processado na nuvem: " + lotsSent + " lote(s) e " + backupsSent +
+          " backup(s). IDs já existentes foram ignorados. Os dados locais foram mantidos neste computador." +
+          (history.skippedLots || history.skippedBackups
+            ? " " + history.skippedLots + " lote(s) e " + history.skippedBackups + " backup(s) antigos, incompatíveis ou inválidos não foram migrados."
+            : ""), false);
+        button.hidden = true;
+      } catch (error) {
+        console.error("Não foi possível migrar o histórico local para a nuvem.", error);
+        setMessage($("loadMessage"), "A migração foi interrompida. Nenhum dado local foi apagado. Erro: " + error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function cloudWorkspaceData() {
+      if (!state.cloudIndex) return { activeLotId: "", lots: {}, backups: [] };
+      return {
+        activeLotId: state.lotId,
+        lots: state.cloudIndex.lots,
+        backups: state.cloudIndex.backups
+      };
+    }
+
+    async function cloudRefreshIndex() {
+      const now = new Date().toISOString();
+      const lotRows = await cloudApi(
+        "localizador_lots?select=id,file_name,pieces,filter_version,box_identity_version,created_at,updated_at,expires_at&expires_at=gt." +
+          encodeURIComponent(now) + "&order=updated_at.desc",
+        { method: "GET" }
+      );
+      const backupRows = await cloudApi(
+        "localizador_backups?select=id,file_name,created_at,expires_at&expires_at=gt." +
+          encodeURIComponent(now) + "&order=created_at.desc",
+        { method: "GET" }
+      );
+      const lots = {};
+      (lotRows || []).forEach((row) => {
+        const cached = state.cloudIndex && state.cloudIndex.lots[row.id];
+        lots[row.id] = {
+          fileName: row.file_name,
+          pieces: Number(row.pieces) || 0,
+          filterVersion: row.filter_version,
+          boxIdentityVersion: Number(row.box_identity_version) || 0,
+          updatedAt: new Date(row.updated_at).getTime(),
+          createdAt: row.created_at,
+          expiresAt: row.expires_at,
+          boxes: cached ? cached.boxes : [],
+          scannedByBox: cached ? cached.scannedByBox : [],
+          scannedCodes: cached ? cached.scannedCodes : []
+        };
+      });
+      state.cloudIndex = {
+        lots: lots,
+        backups: (backupRows || []).map((row) => ({
+          id: row.id,
+          fileName: row.file_name,
+          archivedAt: new Date(row.created_at).getTime()
+        }))
+      };
+      renderSavedLots(cloudWorkspaceData());
+      return Object.keys(lots);
+    }
+
+    async function cloudLoadScans(lotId) {
+      const scans = [];
+      const pageSize = 1000;
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await cloudApi(
+          "localizador_scans?select=barcode,box_id,scanned_at&lot_id=eq." +
+            encodeURIComponent(lotId) + "&order=scanned_at.asc&limit=" + pageSize + "&offset=" + offset,
+          { method: "GET" }
+        );
+        scans.push(...(page || []));
+        if (!page || page.length < pageSize) break;
+      }
+      return scans;
+    }
+
+    function applyCloudScans(scans) {
+      state.scannedCodes = new Set();
+      state.scannedByBox = new Map();
+      (scans || []).forEach((scan) => {
+        state.scannedCodes.add(normalize(scan.barcode));
+        state.scannedByBox.set(scan.box_id, (state.scannedByBox.get(scan.box_id) || 0) + 1);
+      });
+      state.cloudIndex.lots[state.lotId].scannedCodes = Array.from(state.scannedCodes);
+      state.cloudIndex.lots[state.lotId].scannedByBox = Array.from(state.scannedByBox.entries());
+      renderBoxProgress();
+    }
+
+    async function cloudActivateLot(lotId, message) {
+      const row = await cloudApi(
+        "localizador_lots?select=id,file_name,boxes,pieces,filter_version,box_identity_version,created_at,updated_at,expires_at&id=eq." +
+          encodeURIComponent(lotId) + "&limit=1",
+        { method: "GET" }
+      );
+      const lotRow = row && row[0];
+      if (!lotRow) throw new Error("O lote compartilhado não foi encontrado ou expirou.");
+      const lot = {
+        fileName: lotRow.file_name,
+        boxes: lotRow.boxes || [],
+        pieces: Number(lotRow.pieces) || 0,
+        filterVersion: lotRow.filter_version,
+        boxIdentityVersion: Number(lotRow.box_identity_version) || 0,
+        scannedByBox: [],
+        scannedCodes: [],
+        updatedAt: new Date(lotRow.updated_at).getTime()
+      };
+      state.cloudIndex.lots[lotId] = lot;
+      state.lotId = lotId;
+      state.lotName = lot.fileName;
+      state.boxes = lot.boxes;
+      state.boxById = new Map(state.boxes.map((box) => [box.id, box]));
+      state.pieces = lot.pieces;
+      state.cloudReadyForScans = false;
+      state.barcodeMap = new Map();
+      state.boxes.forEach((box) => {
+        (box.pieces || []).forEach((piece) => {
+          const barcode = normalize(piece.barcode);
+          if (barcode && !state.barcodeMap.has(barcode)) {
+            state.barcodeMap.set(barcode, {
+              boxId: box.id,
+              displayBoxId: box.displayId || box.id,
+              groupKey: box.groupKey || "Sem ambiente/cliente",
+              boxNumber: box.number,
+              quantity: box.quantity
+            });
+          }
+        });
+      });
+      $("fileName").textContent = state.lotName;
+      $("pieceCount").textContent = state.pieces.toLocaleString("pt-BR");
+      $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
+      $("dataStatus").textContent = "Sincronizado";
+      $("dataStatus").classList.add("ready");
+      $("resetLot").disabled = false;
+      $("exportReport").disabled = false;
+      updateProgress(100, "Arquivo carregado");
+      setMessage($("loadMessage"), message || "Lote compartilhado carregado. As leituras são sincronizadas entre computadores.", false);
+      $("result").className = "result empty";
+      $("result").textContent = "Aguardando o próximo código.";
+      $("missingPiecesPanel").innerHTML = "";
+      applyCloudScans(await cloudLoadScans(lotId));
+      state.cloudReadyForScans = true;
+      renderSavedLots(cloudWorkspaceData());
+    }
+
+    async function cloudUploadCurrentLot() {
+      if (!state.cloudSession || !state.lotId) return;
+      const lot = serializeCurrentLot();
+      await cloudApi("localizador_lots", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          id: state.lotId,
+          file_name: lot.fileName,
+          boxes: lot.boxes,
+          pieces: lot.pieces,
+          filter_version: lot.filterVersion,
+          box_identity_version: lot.boxIdentityVersion
+        })
+      });
+      state.cloudIndex = state.cloudIndex || { lots: {}, backups: [] };
+      state.cloudIndex.lots[state.lotId] = Object.assign({}, lot, {
+        createdAt: new Date().toISOString(),
+        expiresAt: null
+      });
+      await cloudRefreshIndex();
+      setCloudStatus("Conectado · " + (state.cloudSession.user && state.cloudSession.user.email || ""), false);
+    }
+
+    async function refreshCloudWorkspace(loadIndex) {
+      if (state.cloudRefreshInProgress || !state.cloudSession) return;
+      state.cloudRefreshInProgress = true;
+      try {
+        if (loadIndex || !state.cloudIndex) await cloudRefreshIndex();
+        const lotIds = Object.keys(state.cloudIndex.lots);
+        if (!lotIds.includes(state.lotId)) {
+          if (lotIds.length) {
+            await cloudActivateLot(lotIds[0], "Lote compartilhado carregado.");
+          } else {
+            state.lotId = "";
+            state.cloudReadyForScans = false;
+            state.boxes = [];
+            state.boxById = new Map();
+            state.barcodeMap = new Map();
+            state.scannedByBox = new Map();
+            state.scannedCodes = new Set();
+            state.pieces = 0;
+            $("dataStatus").textContent = "Aguardando CSV";
+            $("dataStatus").classList.remove("ready");
+            $("resetLot").disabled = true;
+            $("exportReport").disabled = true;
+            $("pieceCount").textContent = "0";
+            $("boxCount").textContent = "0";
+            $("result").className = "result empty";
+            $("result").textContent = "O resultado da leitura aparecerá aqui.";
+            $("fileName").textContent = "Nenhum arquivo selecionado";
+            setMessage($("loadMessage"), "Nenhum lote compartilhado disponível. Importe um CSV para começar.", false);
+            renderBoxProgress();
+          }
+        } else {
+          applyCloudScans(await cloudLoadScans(state.lotId));
+          state.cloudReadyForScans = true;
+        }
+        setCloudStatus("Conectado · " + (state.cloudSession.user && state.cloudSession.user.email || ""), false);
+      } catch (error) {
+        console.error("Não foi possível sincronizar com o banco compartilhado.", error);
+        setCloudStatus("Falha na sincronização", true);
+        setMessage($("loadMessage"), "Não foi possível sincronizar com o Supabase: " + error.message, true);
+      } finally {
+        state.cloudRefreshInProgress = false;
+      }
+    }
+
+    async function initializeCloudWorkspace() {
+      $("authForm").hidden = true;
+      $("authSignOut").hidden = false;
+      $("appRoot").hidden = false;
+      setMessage($("authMessage"), "Sessão compartilhada ativa. Use este mesmo login nos outros computadores.", false);
+      await refreshCloudWorkspace(true);
+      updateLocalHistoryMigrationButton();
+      if (state.cloudRefreshTimer) clearInterval(state.cloudRefreshTimer);
+      state.cloudRefreshTimer = setInterval(() => {
+        refreshCloudWorkspace(true);
+      }, 5000);
     }
 
     function focusManualCode() {
@@ -673,7 +1122,7 @@
       $("savedBackups").hidden = !backups.length;
       $("backupTabs").innerHTML = "";
       backups.forEach((backup) => {
-        const compatible = backup.lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
+        const compatible = !backup.lot || backup.lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lot-tab";
@@ -722,7 +1171,7 @@
       $("result").textContent = "Aguardando o próximo código.";
       $("missingPiecesPanel").innerHTML = "";
       renderBoxProgress();
-      renderSavedLots(getStoredData());
+      renderSavedLots(state.cloudIndex ? cloudWorkspaceData() : getStoredData());
     }
 
     function restoreState() {
@@ -859,6 +1308,13 @@
       const result = $("result");
       const normalizedCode = normalize(code);
       await prepareAudio();
+      if (state.cloudSession && !state.cloudReadyForScans) {
+        result.className = "result scan-result error";
+        result.textContent = "Aguarde a sincronização do lote antes de ler peças.";
+        setMessage($("scanMessage"), "O lote ainda não foi salvo no banco compartilhado.", true);
+        prepareNextScan(fromCamera);
+        return;
+      }
       if (!state.barcodeMap.size) {
         result.className = "result scan-result error";
         result.textContent = "Carregue o CSV antes de fazer uma busca.";
@@ -887,7 +1343,29 @@
         state.lastCameraCode = normalizedCode;
         state.lastCameraRead = now;
       }
-      if (state.scannedCodes.has(normalizedCode)) {
+      let cloudScanResult = null;
+      if (state.cloudSession) {
+        try {
+          cloudScanResult = await cloudApi("rpc/record_localizador_scan", {
+            method: "POST",
+            body: JSON.stringify({ p_lot_id: state.lotId, p_barcode: normalizedCode })
+          });
+          if (!cloudScanResult || cloudScanResult.status === "not_found") {
+            throw new Error("O código não está associado a uma caixa neste lote compartilhado.");
+          }
+          applyCloudScans(await cloudLoadScans(state.lotId));
+        } catch (error) {
+          console.error("Não foi possível registrar a leitura no banco compartilhado.", error);
+          setCloudStatus("Falha na sincronização", true);
+          setMessage($("scanMessage"), "Leitura não registrada. Verifique a conexão e tente novamente: " + error.message, true);
+          prepareNextScan(fromCamera);
+          return;
+        }
+      }
+      const alreadyScanned = cloudScanResult
+        ? cloudScanResult.status === "duplicate"
+        : state.scannedCodes.has(normalizedCode);
+      if (alreadyScanned) {
         const scannedTotal = state.scannedByBox.get(item.boxId) || 0;
         const remaining = Math.max(item.quantity - scannedTotal, 0);
         result.className = "result scan-result duplicate" + (String(item.boxNumber).length >= 3 ? " has-long-box-number" : "");
@@ -907,7 +1385,9 @@
         return;
       }
       state.scannedCodes.add(normalizedCode);
-      const scanned = (state.scannedByBox.get(item.boxId) || 0) + 1;
+      const scanned = cloudScanResult
+        ? Number(cloudScanResult.scanned_count)
+        : (state.scannedByBox.get(item.boxId) || 0) + 1;
       state.scannedByBox.set(item.boxId, Math.min(scanned, item.quantity));
       saveState();
       const scannedTotal = state.scannedByBox.get(item.boxId);
@@ -981,7 +1461,7 @@
       $("dataStatus").textContent = "Processando CSV...";
       $("dataStatus").classList.remove("ready");
       updateProgress(0, "Lendo arquivo...");
-      const finish = () => {
+      const finish = async () => {
         if (!map.size) {
           $("exportReport").disabled = true;
           updateProgress(100, "Processamento concluído");
@@ -1013,17 +1493,35 @@
         state.pieces = pieces;
         $("pieceCount").textContent = pieces.toLocaleString("pt-BR");
         $("boxCount").textContent = state.boxes.length.toLocaleString("pt-BR");
-        $("dataStatus").textContent = "CSV pronto para consulta";
-        $("dataStatus").classList.add("ready");
         updateProgress(100, "Arquivo carregado");
         const warning = invalidRows ? " " + invalidRows.toLocaleString("pt-BR") + " linhas inválidas ignoradas." : "";
-        setMessage($("loadMessage"), "Lista carregada. Você já pode iniciar a leitura." + warning, false);
         $("result").className = "result empty";
         $("result").textContent = "Aguardando o próximo código.";
         $("resetLot").disabled = false;
         $("exportReport").disabled = false;
         renderBoxProgress();
         saveState();
+        if (state.cloudSession) {
+          state.cloudReadyForScans = false;
+          $("dataStatus").textContent = "Sincronizando CSV...";
+          try {
+            await cloudUploadCurrentLot();
+            state.cloudReadyForScans = true;
+          } catch (error) {
+            console.error("Não foi possível enviar o lote ao banco compartilhado.", error);
+            $("dataStatus").textContent = "Falha na sincronização";
+            $("dataStatus").classList.remove("ready");
+            setCloudStatus("Falha na sincronização", true);
+            setMessage($("loadMessage"), "O CSV foi processado, mas não foi enviado ao banco compartilhado: " + error.message, true);
+            return;
+          }
+        } else {
+          $("dataStatus").textContent = "CSV pronto para consulta";
+          $("dataStatus").classList.add("ready");
+        }
+        setMessage($("loadMessage"), state.cloudSession
+          ? "Lista carregada e sincronizada entre computadores." + warning
+          : "Lista carregada. Você já pode iniciar a leitura." + warning, false);
       };
       const processRows = (rows) => {
         rows.forEach((row) => {
@@ -1206,6 +1704,15 @@
       const button = event.target.closest("[data-lot-id]");
       if (!button || button.dataset.lotId === state.lotId) return;
       if (state.scanning) await stopCamera();
+      if (state.cloudSession) {
+        try {
+          await cloudActivateLot(button.dataset.lotId, "Lote compartilhado aberto. As leituras são sincronizadas entre computadores.");
+        } catch (error) {
+          console.error("Não foi possível abrir o lote compartilhado.", error);
+          setMessage($("loadMessage"), "Não foi possível abrir o lote: " + error.message, true);
+        }
+        return;
+      }
       const data = getStoredData();
       const lot = data.lots[button.dataset.lotId];
       if (lot) {
@@ -1230,6 +1737,21 @@
       const button = event.target.closest("[data-backup-id]");
       if (!button) return;
       if (state.scanning) await stopCamera();
+      if (state.cloudSession) {
+        try {
+          const newLotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+          const restoredLotId = await cloudApi("rpc/restore_localizador_backup", {
+            method: "POST",
+            body: JSON.stringify({ p_backup_id: button.dataset.backupId, p_new_lot_id: newLotId })
+          });
+          await cloudRefreshIndex();
+          await cloudActivateLot(restoredLotId, "Backup compartilhado restaurado. As leituras foram sincronizadas.");
+        } catch (error) {
+          console.error("Não foi possível restaurar o backup compartilhado.", error);
+          setMessage($("loadMessage"), "Não foi possível restaurar o backup: " + error.message, true);
+        }
+        return;
+      }
       const data = getStoredData();
       const backup = data.backups.find((item) => item.id === button.dataset.backupId);
       if (!backup) return;
@@ -1307,6 +1829,10 @@
     $("resetLot").addEventListener("click", () => {
       if (!state.lotId || !state.barcodeMap.size) return;
       if (!window.confirm("Zerar as peças conferidas deste lote? O arquivo continuará salvo para uso posterior.")) return;
+      if (state.cloudSession) {
+        void resetCloudLot();
+        return;
+      }
       const data = getStoredData();
       archiveCurrentLot(data);
       state.scannedByBox = new Map();
@@ -1327,6 +1853,27 @@
         setMessage($("loadMessage"), "A conferência foi zerada nesta aba, mas não foi possível salvá-la no navegador.", true);
       }
     });
+    async function resetCloudLot() {
+      try {
+        await cloudApi("rpc/reset_localizador_lot", {
+          method: "POST",
+          body: JSON.stringify({ p_lot_id: state.lotId, p_snapshot: serializeCurrentLot() })
+        });
+        state.scannedByBox = new Map();
+        state.scannedCodes = new Set();
+        state.lastCameraCode = "";
+        state.lastCameraRead = 0;
+        $("result").className = "result empty";
+        $("result").textContent = "Aguardando o próximo código.";
+        $("missingPiecesPanel").innerHTML = "";
+        renderBoxProgress();
+        await cloudRefreshIndex();
+        setMessage($("loadMessage"), "Conferência zerada. O backup foi salvo na nuvem por quatro meses.", false);
+      } catch (error) {
+        console.error("Não foi possível zerar e salvar o backup na nuvem.", error);
+        setMessage($("loadMessage"), "Não foi possível zerar a conferência compartilhada: " + error.message, true);
+      }
+    }
     $("exportReport").addEventListener("click", exportReport);
     $("manualForm").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1361,12 +1908,40 @@
         setMessage($("scanMessage"), "Não foi possível ativar o som neste navegador.", true);
       }
     });
+    $("authForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = $("authSubmit");
+      button.disabled = true;
+      setMessage($("authMessage"), "Entrando...", false);
+      try {
+        await signInToCloud($("authEmail").value.trim(), $("authPassword").value);
+        $("authPassword").value = "";
+      } catch (error) {
+        console.error("Não foi possível entrar no sistema compartilhado.", error);
+        setMessage($("authMessage"), "Não foi possível entrar: " + error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $("authSignOut").addEventListener("click", async () => {
+      if (state.scanning) await stopCamera();
+      try {
+        await signOutFromCloud();
+        state.cloudIndex = null;
+        state.cloudReadyForScans = false;
+        setMessage($("authMessage"), "Sessão encerrada.", false);
+      } catch (error) {
+        console.error("Não foi possível encerrar a sessão compartilhada.", error);
+        setMessage($("authMessage"), error.message, true);
+      }
+    });
+    $("migrateLocalHistory").addEventListener("click", migrateLocalHistoryToCloud);
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
     }
-    restoreState();
+    initializeCloudAuth();
   </script>
 </body>
 </html>
