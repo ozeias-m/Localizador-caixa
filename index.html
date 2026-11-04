@@ -124,9 +124,11 @@
     .auth-card { width: min(100% - 32px, 560px); margin: 40px auto; }
     .auth-card h1 { margin-top: 0; }
     .auth-card form { display: grid; gap: 12px; }
+    .auth-card form[hidden] { display: none; }
     .auth-card label { display: grid; gap: 6px; color: var(--muted); font-weight: 700; }
     .auth-card input { width: 100%; }
     .auth-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .auth-card > #requestPasswordReset { margin-top: 12px; }
     #cloudSessionStatus { color: var(--muted); font-size: .85rem; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-group { display: grid; gap: 10px; }
@@ -301,6 +303,19 @@
         <span id="cloudSessionStatus" role="status" aria-live="polite"></span>
       </div>
     </form>
+    <button id="requestPasswordReset" class="secondary" type="button">Esqueci a senha</button>
+    <form id="resetPasswordForm" hidden>
+      <label for="newPassword">Nova senha
+        <input id="newPassword" type="password" autocomplete="new-password" required>
+      </label>
+      <label for="confirmNewPassword">Confirme a nova senha
+        <input id="confirmNewPassword" type="password" autocomplete="new-password" required>
+      </label>
+      <div class="auth-actions">
+        <button id="saveNewPassword" type="submit">Salvar nova senha</button>
+        <button id="cancelPasswordReset" class="secondary" type="button">Voltar ao login</button>
+      </div>
+    </form>
     <p id="authMessage" class="message" aria-live="polite">Use o e-mail e a senha compartilhados criados no Supabase.</p>
   </section>
 
@@ -409,7 +424,7 @@
     const SUPABASE_URL = "https://jpkkhuntkgbkfnicmivr.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cBLyza9hto-m366-6agP1g_UaAitSYR";
     const CLOUD_SESSION_KEY = "localizador-caixas-cloud-session-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "" };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError, isWarning) {
@@ -455,6 +470,80 @@
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.msg || result.message || result.error_description || "Não foi possível autenticar no Supabase.");
+      return result;
+    }
+
+    function clearAuthCallbackParameters() {
+      const callbackUrl = new URL(location.href);
+      callbackUrl.hash = "";
+      ["access_token", "refresh_token", "type", "expires_in", "expires_at", "token_type", "error", "error_code", "error_description", "token_hash", "code"]
+        .forEach((key) => callbackUrl.searchParams.delete(key));
+      history.replaceState(null, document.title, callbackUrl.pathname + callbackUrl.search);
+    }
+
+    async function initializePasswordRecovery() {
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      const query = new URLSearchParams(location.search);
+      const type = fragment.get("type") || query.get("type");
+      const isRecovery = type === "recovery";
+      if (!isRecovery) return false;
+
+      const callbackError = fragment.get("error_description") || query.get("error_description") ||
+        fragment.get("error") || query.get("error");
+      if (callbackError) {
+        clearAuthCallbackParameters();
+        setMessage($("authMessage"), "O link de recuperação não pôde ser validado: " + callbackError, true);
+        return true;
+      }
+
+      let accessToken = fragment.get("access_token") || query.get("access_token");
+      const tokenHash = query.get("token_hash");
+      if (!accessToken && tokenHash) {
+        try {
+          const session = await cloudAuthRequest("verify", { type: "recovery", token_hash: tokenHash });
+          accessToken = session.access_token;
+        } catch (error) {
+          clearAuthCallbackParameters();
+          setMessage($("authMessage"), "O link expirou ou já foi usado. Solicite uma nova recuperação de senha.", true);
+          return true;
+        }
+      }
+
+      clearAuthCallbackParameters();
+      if (!accessToken) {
+        setMessage($("authMessage"), "O link de recuperação está incompleto ou expirou. Solicite um novo link.", true);
+        return true;
+      }
+
+      clearCloudSession();
+      state.recoveryAccessToken = accessToken;
+      $("authForm").hidden = true;
+      $("requestPasswordReset").hidden = true;
+      $("resetPasswordForm").hidden = false;
+      setMessage($("authMessage"), "Defina sua nova senha para a conta compartilhada.", false);
+      $("newPassword").focus();
+      return true;
+    }
+
+    async function sendPasswordRecovery(email) {
+      const redirectTo = location.origin + location.pathname;
+      return cloudAuthRequest("recover?redirect_to=" + encodeURIComponent(redirectTo), { email: email });
+    }
+
+    async function updatePasswordFromRecovery(password) {
+      const response = await fetch(SUPABASE_URL + "/auth/v1/user", {
+        method: "PUT",
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + state.recoveryAccessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password: password })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.msg || result.message || result.error_description || "Não foi possível alterar a senha.");
+      }
       return result;
     }
 
@@ -1923,6 +2012,60 @@
         button.disabled = false;
       }
     });
+    $("requestPasswordReset").addEventListener("click", async () => {
+      const emailInput = $("authEmail");
+      if (!emailInput.reportValidity()) return;
+      const button = $("requestPasswordReset");
+      button.disabled = true;
+      setMessage($("authMessage"), "Enviando instruções para o e-mail...", false);
+      try {
+        await sendPasswordRecovery(emailInput.value.trim());
+        setMessage($("authMessage"),
+          "Se houver uma conta com esse e-mail, enviaremos um link para criar uma nova senha. Confira também a caixa de spam.", false);
+      } catch (error) {
+        console.error("Não foi possível solicitar a recuperação de senha.", error);
+        setMessage($("authMessage"),
+          "Não foi possível enviar o link: " + error.message +
+          " Confira se a URL https://ozeias-m.github.io/Localizador-caixa/ está permitida em Authentication → URL Configuration → Redirect URLs.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $("resetPasswordForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const password = $("newPassword").value;
+      if (password !== $("confirmNewPassword").value) {
+        setMessage($("authMessage"), "As senhas não são iguais. Confira e tente novamente.", true);
+        $("confirmNewPassword").focus();
+        return;
+      }
+      const button = $("saveNewPassword");
+      button.disabled = true;
+      setMessage($("authMessage"), "Salvando a nova senha...", false);
+      try {
+        await updatePasswordFromRecovery(password);
+        state.recoveryAccessToken = "";
+        $("resetPasswordForm").reset();
+        $("resetPasswordForm").hidden = true;
+        $("authForm").hidden = false;
+        $("requestPasswordReset").hidden = false;
+        setMessage($("authMessage"), "Senha alterada com sucesso. Entre usando a nova senha.", false);
+        $("authPassword").focus();
+      } catch (error) {
+        console.error("Não foi possível atualizar a senha.", error);
+        setMessage($("authMessage"), "Não foi possível alterar a senha: " + error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $("cancelPasswordReset").addEventListener("click", () => {
+      state.recoveryAccessToken = "";
+      $("resetPasswordForm").reset();
+      $("resetPasswordForm").hidden = true;
+      $("authForm").hidden = false;
+      $("requestPasswordReset").hidden = false;
+      setMessage($("authMessage"), "Use o e-mail e a senha compartilhados criados no Supabase.", false);
+    });
     $("authSignOut").addEventListener("click", async () => {
       if (state.scanning) await stopCamera();
       try {
@@ -1939,9 +2082,14 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=21").catch(() => {});
     }
-    initializeCloudAuth();
+    initializePasswordRecovery().then((isRecovery) => {
+      if (!isRecovery) initializeCloudAuth();
+    }).catch((error) => {
+      console.error("Não foi possível inicializar a recuperação de senha.", error);
+      setMessage($("authMessage"), "Não foi possível validar o link de recuperação. Solicite um novo link.", true);
+    });
   </script>
 </body>
 </html>
