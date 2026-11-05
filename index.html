@@ -130,6 +130,18 @@
     .auth-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .auth-card > #requestPasswordReset { margin-top: 12px; }
     #cloudSessionStatus { color: var(--muted); font-size: .85rem; }
+    .saved-item-row { display: flex; align-items: stretch; gap: 6px; max-width: 100%; }
+    .saved-item-row .lot-tab { flex: 1; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+    .saved-item-row .delete-saved-item { flex: 0 0 auto; padding: 8px 10px; color: #8d1d16; background: #ffe4df; font-size: .82rem; }
+    .saved-item-row .delete-saved-item:hover { background: #ffd1c8; }
+    .delete-confirm-dialog { width: min(460px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 24px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow); }
+    .delete-confirm-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+    .delete-confirm-dialog form { display: grid; gap: 12px; }
+    .delete-confirm-dialog h2 { margin: 0; font-size: 1.2rem; }
+    .delete-confirm-dialog p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .delete-confirm-dialog label { display: grid; gap: 6px; color: var(--muted); font-weight: 700; }
+    .delete-confirm-dialog input { width: 100%; }
+    .delete-dialog-error { min-height: 0; margin: 0; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-group { display: grid; gap: 10px; }
     .box-group.collapsed > .box-group-boxes { display: none; }
@@ -319,6 +331,21 @@
     <p id="authMessage" class="message" aria-live="polite">Use o e-mail e a senha compartilhados criados no Supabase.</p>
   </section>
 
+  <dialog id="deleteConfirmDialog" class="delete-confirm-dialog" aria-labelledby="deleteConfirmTitle">
+    <form id="deleteConfirmForm">
+      <h2 id="deleteConfirmTitle">Confirmar exclusão</h2>
+      <p id="deleteConfirmWarning"></p>
+      <label for="deleteConfirmPassword">Digite sua senha de login para confirmar
+        <input id="deleteConfirmPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="deleteConfirmError" class="message delete-dialog-error" role="alert" aria-live="assertive"></p>
+      <div class="auth-actions">
+        <button id="confirmDeleteSavedItem" type="submit">Excluir permanentemente</button>
+        <button id="cancelDeleteSavedItem" class="secondary" type="button">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
   <main id="appRoot" class="app" hidden>
     <header>
       <div>
@@ -424,7 +451,7 @@
     const SUPABASE_URL = "https://jpkkhuntkgbkfnicmivr.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cBLyza9hto-m366-6agP1g_UaAitSYR";
     const CLOUD_SESSION_KEY = "localizador-caixas-cloud-session-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), expandedBoxIds: new Set(), expandedGroupKeys: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "" };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), expandedBoxIds: new Set(), expandedGroupKeys: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "", pendingSavedItemDeletion: null };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError, isWarning) {
@@ -593,6 +620,49 @@
         throw new Error(detail);
       }
       return result;
+    }
+
+    async function verifyCloudPassword(password) {
+      if (!state.cloudSession || !state.cloudSession.user || !state.cloudSession.user.email) {
+        throw new Error("Não foi possível identificar a conta conectada. Entre novamente.");
+      }
+      const verifiedSession = await cloudAuthRequest("token?grant_type=password", {
+        email: state.cloudSession.user.email,
+        password: password
+      });
+      if (!verifiedSession.user || verifiedSession.user.id !== state.cloudSession.user.id) {
+        throw new Error("A senha não corresponde à conta conectada.");
+      }
+      return verifiedSession.access_token;
+    }
+
+    async function deleteCloudSavedItem(item, accessToken) {
+      const functionName = item.kind === "lot"
+        ? "delete_localizador_lot"
+        : "delete_localizador_backup";
+      const argumentName = item.kind === "lot" ? "p_lot_id" : "p_backup_id";
+      const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + functionName, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ [argumentName]: item.id })
+      });
+      const text = await response.text();
+      let result = null;
+      if (text) {
+        try {
+          result = JSON.parse(text);
+        } catch (error) {
+          result = text;
+        }
+      }
+      if (!response.ok) {
+        const detail = result && (result.message || result.details || result.hint) || "Erro HTTP " + response.status;
+        throw new Error(detail);
+      }
     }
 
     async function signInToCloud(email, password) {
@@ -792,6 +862,33 @@
       renderBoxProgress();
     }
 
+    function clearLoadedLot(message) {
+      state.lotId = "";
+      state.lotName = "";
+      state.barcodeMap = new Map();
+      state.boxes = [];
+      state.boxById = new Map();
+      state.scannedByBox = new Map();
+      state.scannedCodes = new Set();
+      state.expandedBoxIds.clear();
+      state.expandedGroupKeys.clear();
+      state.pieces = 0;
+      state.cloudReadyForScans = false;
+      $("dataStatus").textContent = "Aguardando CSV";
+      $("dataStatus").classList.remove("ready");
+      $("resetLot").disabled = true;
+      $("exportReport").disabled = true;
+      $("pieceCount").textContent = "0";
+      $("boxCount").textContent = "0";
+      $("result").className = "result empty";
+      $("result").textContent = "O resultado da leitura aparecerá aqui.";
+      $("missingPiecesPanel").innerHTML = "";
+      $("fileName").textContent = "Nenhum arquivo selecionado";
+      updateProgress(0, "Aguardando arquivo");
+      renderBoxProgress();
+      if (message) setMessage($("loadMessage"), message, false);
+    }
+
     async function cloudActivateLot(lotId, message) {
       if (state.lotId !== lotId) {
         state.expandedBoxIds.clear();
@@ -887,25 +984,7 @@
           if (lotIds.length) {
             await cloudActivateLot(lotIds[0], "Lote compartilhado carregado.");
           } else {
-            state.lotId = "";
-            state.cloudReadyForScans = false;
-            state.boxes = [];
-            state.boxById = new Map();
-            state.barcodeMap = new Map();
-            state.scannedByBox = new Map();
-            state.scannedCodes = new Set();
-            state.pieces = 0;
-            $("dataStatus").textContent = "Aguardando CSV";
-            $("dataStatus").classList.remove("ready");
-            $("resetLot").disabled = true;
-            $("exportReport").disabled = true;
-            $("pieceCount").textContent = "0";
-            $("boxCount").textContent = "0";
-            $("result").className = "result empty";
-            $("result").textContent = "O resultado da leitura aparecerá aqui.";
-            $("fileName").textContent = "Nenhum arquivo selecionado";
-            setMessage($("loadMessage"), "Nenhum lote compartilhado disponível. Importe um CSV para começar.", false);
-            renderBoxProgress();
+            clearLoadedLot("Nenhum lote compartilhado disponível. Importe um CSV para começar.");
           }
         } else {
           applyCloudScans(await cloudLoadScans(state.lotId));
@@ -1204,26 +1283,156 @@
       lotIds.forEach((lotId) => {
         const lot = data.lots[lotId];
         const compatible = lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
+        const row = document.createElement("div");
+        row.className = "saved-item-row";
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lot-tab" + (lotId === state.lotId ? " active" : "");
         button.dataset.lotId = lotId;
         button.disabled = !compatible;
         button.textContent = (lot.fileName || "Lote salvo") + (compatible ? "" : " (Reimporte o CSV)");
-        $("lotTabs").appendChild(button);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-saved-item";
+        deleteButton.dataset.deleteItemKind = "lot";
+        deleteButton.dataset.deleteItemId = lotId;
+        deleteButton.dataset.deleteItemName = lot.fileName || "Lote salvo";
+        deleteButton.setAttribute("aria-label", "Excluir arquivo " + (lot.fileName || "Lote salvo"));
+        deleteButton.textContent = "Excluir";
+        row.append(button, deleteButton);
+        $("lotTabs").appendChild(row);
       });
       $("savedBackups").hidden = !backups.length;
       $("backupTabs").innerHTML = "";
       backups.forEach((backup) => {
         const compatible = !backup.lot || backup.lot.boxIdentityVersion === BOX_IDENTITY_VERSION;
+        const row = document.createElement("div");
+        row.className = "saved-item-row";
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lot-tab";
         button.dataset.backupId = backup.id;
         button.disabled = !compatible;
         button.textContent = (backup.fileName || "Lote") + (compatible ? " (antes de zerar)" : " (Reimporte o CSV)");
-        $("backupTabs").appendChild(button);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-saved-item";
+        deleteButton.dataset.deleteItemKind = "backup";
+        deleteButton.dataset.deleteItemId = backup.id;
+        deleteButton.dataset.deleteItemName = backup.fileName || "Lote";
+        deleteButton.setAttribute("aria-label", "Excluir backup de " + (backup.fileName || "Lote"));
+        deleteButton.textContent = "Excluir";
+        row.append(button, deleteButton);
+        $("backupTabs").appendChild(row);
       });
+    }
+
+    function requestSavedItemDeletion(kind, id, fileName) {
+      state.pendingSavedItemDeletion = { kind: kind, id: id, fileName: fileName || "Lote" };
+      $("deleteConfirmTitle").textContent = kind === "lot"
+        ? "Excluir arquivo importado?"
+        : "Excluir backup?";
+      $("deleteConfirmWarning").textContent =
+        "O item “" + state.pendingSavedItemDeletion.fileName + "” será excluído permanentemente" +
+        (state.cloudSession ? " da nuvem e de todos os computadores conectados." : " deste navegador.") +
+        " Esta ação não pode ser desfeita. Digite a senha atual da conta compartilhada para confirmar.";
+      $("deleteConfirmPassword").value = "";
+      $("deleteConfirmError").textContent = "";
+      $("deleteConfirmError").classList.remove("error");
+      $("deleteConfirmDialog").showModal();
+      $("deleteConfirmPassword").focus();
+    }
+
+    async function deleteSavedItem(item, accessToken) {
+      if (state.cloudSession) {
+        await deleteCloudSavedItem(item, accessToken);
+        try {
+          const remainingLotIds = await cloudRefreshIndex();
+          if (item.kind === "lot" && state.lotId === item.id) {
+            if (remainingLotIds.length) {
+              await cloudActivateLot(remainingLotIds[0], "Arquivo excluído. Outro lote compartilhado foi aberto.");
+            } else {
+              clearLoadedLot("Arquivo excluído. Não há outros lotes compartilhados; importe um CSV para começar.");
+              renderSavedLots(cloudWorkspaceData());
+            }
+          } else {
+            renderSavedLots(cloudWorkspaceData());
+          }
+        } catch (error) {
+          console.error("O item foi excluído, mas não foi possível atualizar a lista da nuvem.", error);
+          setMessage($("loadMessage"),
+            "O item foi excluído, mas a lista não pôde ser atualizada agora. Ela será atualizada na próxima sincronização: " +
+            error.message, true);
+          return;
+        }
+        setMessage($("loadMessage"),
+          (item.kind === "lot" ? "Arquivo importado excluído." : "Backup excluído.") +
+          " A alteração foi sincronizada com os outros computadores.", false);
+        return;
+      }
+
+      if (item.kind === "lot") saveState();
+      const data = getStoredData();
+      if (item.kind === "lot") {
+        if (!Object.prototype.hasOwnProperty.call(data.lots, item.id)) {
+          throw new Error("O arquivo não foi encontrado neste navegador. Atualize a lista e tente novamente.");
+        }
+        delete data.lots[item.id];
+        const deletedActiveLot = data.activeLotId === item.id || state.lotId === item.id;
+        if (deletedActiveLot) {
+          const nextLotId = Object.keys(data.lots).sort((first, second) =>
+            (data.lots[second].updatedAt || 0) - (data.lots[first].updatedAt || 0)
+          )[0] || "";
+          data.activeLotId = nextLotId;
+        }
+        persistStoredData(data, data.activeLotId ? [data.activeLotId] : []);
+        if (deletedActiveLot) {
+          if (data.activeLotId) {
+            applyLot(data.activeLotId, data.lots[data.activeLotId], "Arquivo excluído. Outro lote salvo foi aberto.");
+          } else {
+            clearLoadedLot("Arquivo importado excluído.");
+          }
+        }
+      } else {
+        const backupIndex = data.backups.findIndex((backup) => backup.id === item.id);
+        if (backupIndex < 0) {
+          throw new Error("O backup não foi encontrado neste navegador. Atualize a lista e tente novamente.");
+        }
+        data.backups.splice(backupIndex, 1);
+        persistStoredData(data, state.lotId ? [state.lotId] : []);
+      }
+      renderSavedLots(data);
+      setMessage($("loadMessage"),
+        item.kind === "lot" ? "Arquivo importado excluído deste navegador." : "Backup excluído deste navegador.", false);
+    }
+
+    async function confirmSavedItemDeletion(event) {
+      event.preventDefault();
+      const item = state.pendingSavedItemDeletion;
+      if (!item) return;
+      const confirmButton = $("confirmDeleteSavedItem");
+      confirmButton.disabled = true;
+      $("cancelDeleteSavedItem").disabled = true;
+      $("deleteConfirmError").textContent = "";
+      $("deleteConfirmError").classList.remove("error");
+      let accessToken = "";
+      try {
+        accessToken = await verifyCloudPassword($("deleteConfirmPassword").value);
+        await deleteSavedItem(item, accessToken);
+        state.pendingSavedItemDeletion = null;
+        $("deleteConfirmDialog").close();
+      } catch (error) {
+        console.error("Não foi possível excluir o item salvo.", error);
+        $("deleteConfirmError").textContent = "Não foi possível excluir: " + error.message;
+        $("deleteConfirmError").classList.add("error");
+        $("deleteConfirmPassword").value = "";
+        $("deleteConfirmPassword").focus();
+      } finally {
+        accessToken = "";
+        $("deleteConfirmPassword").value = "";
+        confirmButton.disabled = false;
+        $("cancelDeleteSavedItem").disabled = false;
+      }
     }
 
     function applyLot(lotId, lot, restoredMessage) {
@@ -1798,6 +2007,20 @@
       $("fileName").textContent = file.name;
       setMessage($("loadMessage"), "Processando arquivo...", false);
       parseCsv(file);
+    });
+    $("savedLots").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-item-kind]");
+      if (!button) return;
+      event.stopPropagation();
+      requestSavedItemDeletion(button.dataset.deleteItemKind, button.dataset.deleteItemId, button.dataset.deleteItemName);
+    });
+    $("deleteConfirmForm").addEventListener("submit", confirmSavedItemDeletion);
+    $("cancelDeleteSavedItem").addEventListener("click", () => $("deleteConfirmDialog").close());
+    $("deleteConfirmDialog").addEventListener("close", () => {
+      state.pendingSavedItemDeletion = null;
+      $("deleteConfirmPassword").value = "";
+      $("deleteConfirmError").textContent = "";
+      $("deleteConfirmError").classList.remove("error");
     });
     $("lotTabs").addEventListener("click", async (event) => {
       const button = event.target.closest("[data-lot-id]");

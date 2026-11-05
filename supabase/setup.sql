@@ -290,6 +290,54 @@ begin
 end;
 $$;
 
+create or replace function public.delete_localizador_lot(p_lot_id text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_deleted integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  delete from public.localizador_lots where id = p_lot_id;
+  get diagnostics v_deleted = row_count;
+
+  if v_deleted = 0 then
+    raise exception 'Lot not found or already deleted';
+  end if;
+
+  return true;
+end;
+$$;
+
+create or replace function public.delete_localizador_backup(p_backup_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_deleted integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  delete from public.localizador_backups where id = p_backup_id;
+  get diagnostics v_deleted = row_count;
+
+  if v_deleted = 0 then
+    raise exception 'Backup not found or already deleted';
+  end if;
+
+  return true;
+end;
+$$;
+
 create or replace function public.cleanup_expired_localizador_data()
 returns void
 language plpgsql
@@ -307,6 +355,8 @@ revoke all on function public.reset_localizador_lot(text, jsonb) from public;
 revoke all on function public.restore_localizador_backup(uuid, text) from public;
 revoke all on function public.import_localizador_lot(jsonb) from public;
 revoke all on function public.import_localizador_backup(jsonb, text) from public;
+revoke all on function public.delete_localizador_lot(text) from public;
+revoke all on function public.delete_localizador_backup(uuid) from public;
 revoke all on function public.cleanup_expired_localizador_data() from public, anon, authenticated;
 
 grant execute on function public.record_localizador_scan(text, text) to authenticated;
@@ -314,6 +364,8 @@ grant execute on function public.reset_localizador_lot(text, jsonb) to authentic
 grant execute on function public.restore_localizador_backup(uuid, text) to authenticated;
 grant execute on function public.import_localizador_lot(jsonb) to authenticated;
 grant execute on function public.import_localizador_backup(jsonb, text) to authenticated;
+grant execute on function public.delete_localizador_lot(text) to authenticated;
+grant execute on function public.delete_localizador_backup(uuid) to authenticated;
 
 do $$
 declare
