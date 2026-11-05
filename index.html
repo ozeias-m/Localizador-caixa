@@ -424,7 +424,7 @@
     const SUPABASE_URL = "https://jpkkhuntkgbkfnicmivr.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cBLyza9hto-m366-6agP1g_UaAitSYR";
     const CLOUD_SESSION_KEY = "localizador-caixas-cloud-session-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "" };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), expandedBoxIds: new Set(), expandedGroupKeys: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "" };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError, isWarning) {
@@ -793,6 +793,10 @@
     }
 
     async function cloudActivateLot(lotId, message) {
+      if (state.lotId !== lotId) {
+        state.expandedBoxIds.clear();
+        state.expandedGroupKeys.clear();
+      }
       const row = await cloudApi(
         "localizador_lots?select=id,file_name,boxes,pieces,filter_version,box_identity_version,created_at,updated_at,expires_at&id=eq." +
           encodeURIComponent(lotId) + "&limit=1",
@@ -1223,6 +1227,10 @@
     }
 
     function applyLot(lotId, lot, restoredMessage) {
+      if (state.lotId !== lotId) {
+        state.expandedBoxIds.clear();
+        state.expandedGroupKeys.clear();
+      }
       state.lotId = lotId;
       state.lotName = lot.fileName || "Lote salvo no navegador";
       state.barcodeMap = new Map(lot.barcodeMap || []);
@@ -1326,7 +1334,8 @@
         const pieceList = pieces.length
           ? renderPieceGroup("Conferidas", checkedPieces, true) + renderPieceGroup("Em aberto", openPieces, false)
           : '<div class="message">Este lote foi salvo antes da lista de peças por caixa estar disponível. Importe o CSV novamente para visualizar os detalhes.</div>';
-        return '<div class="box-progress-item' + (done ? ' done' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="false">' +
+        const isExpanded = state.expandedBoxIds.has(box.id);
+        return '<div class="box-progress-item' + (done ? ' done' : '') + (isExpanded ? ' open' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="' + isExpanded + '">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
           '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
           '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.displayId || box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
@@ -1351,7 +1360,8 @@
         const first = group.boxes[0].number;
         const last = group.boxes[group.boxes.length - 1].number;
         const range = first === last ? "Caixa " + first : "Caixas " + first + " a " + last;
-        return '<div class="box-group collapsed"><button type="button" class="box-group-title" aria-expanded="false">' + escapeHtml(group.key) +
+        const isExpanded = state.expandedGroupKeys.has(group.key);
+        return '<div class="box-group' + (isExpanded ? '' : ' collapsed') + '"><button type="button" class="box-group-title" data-group-key="' + escapeHtml(group.key) + '" aria-expanded="' + isExpanded + '">' + escapeHtml(group.key) +
           ' <small>(' + range + ')</small></button><div class="box-group-boxes">' + group.boxes.map(renderBox).join("") + '</div></div>';
       }).join("");
     }
@@ -1884,6 +1894,8 @@
     function toggleBoxDetails(item) {
       const isOpen = item.classList.toggle("open");
       item.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) state.expandedBoxIds.add(item.dataset.boxId);
+      else state.expandedBoxIds.delete(item.dataset.boxId);
     }
     $("boxProgressList").addEventListener("click", (event) => {
       const copyButton = event.target.closest(".box-piece-code-copy");
@@ -1897,6 +1909,8 @@
         const group = groupTitle.closest(".box-group");
         const isCollapsed = group.classList.toggle("collapsed");
         groupTitle.setAttribute("aria-expanded", String(!isCollapsed));
+        if (isCollapsed) state.expandedGroupKeys.delete(groupTitle.dataset.groupKey);
+        else state.expandedGroupKeys.add(groupTitle.dataset.groupKey);
         return;
       }
       const item = event.target.closest(".box-progress-item");
