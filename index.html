@@ -142,6 +142,17 @@
     .delete-confirm-dialog label { display: grid; gap: 6px; color: var(--muted); font-weight: 700; }
     .delete-confirm-dialog input { width: 100%; }
     .delete-dialog-error { min-height: 0; margin: 0; }
+    .move-pieces-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 7px 0; }
+    .move-pieces-toolbar span { color: var(--muted); font-size: .8rem; }
+    .move-pieces-toolbar button { padding: 7px 10px; font-size: .8rem; }
+    .move-confirm-dialog { width: min(460px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 24px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow); }
+    .move-confirm-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+    .move-confirm-dialog form { display: grid; gap: 12px; }
+    .move-confirm-dialog h2 { margin: 0; font-size: 1.2rem; }
+    .move-confirm-dialog p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .move-confirm-dialog label { display: grid; gap: 6px; color: var(--muted); font-weight: 700; }
+    .move-confirm-dialog select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: #000; background: #fff; font: inherit; }
+    .move-dialog-error { min-height: 0; margin: 0; }
     .box-progress-list { display: grid; gap: 12px; margin-top: 16px; }
     .box-group { display: grid; gap: 10px; }
     .box-group.collapsed > .box-group-boxes { display: none; }
@@ -160,7 +171,10 @@
     .box-progress-item.open .box-pieces { display: grid; gap: 7px; }
     .box-piece-group { display: grid; gap: 6px; }
     .box-piece-group-title { margin-top: 5px; color: var(--primary); font-size: .8rem; font-weight: 800; text-transform: uppercase; }
-    .box-piece { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; color: var(--muted); font-size: .82rem; }
+    .box-piece { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; color: var(--muted); font-size: .82rem; }
+    .box-piece .move-piece-select { grid-row: 1; grid-column: 1; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--primary); cursor: pointer; }
+    .box-piece > span:first-of-type { grid-row: 1; grid-column: 2; }
+    .box-piece > span:last-child { grid-row: 1; grid-column: 3; }
     .box-piece small { display: block; margin-top: 3px; color: #d9e7b5; font-size: .78rem; }
     .box-piece.checked { color: #b9ed8a; }
     .box-piece.checked .box-piece-code { color: #b9ed8a; }
@@ -346,6 +360,21 @@
     </form>
   </dialog>
 
+  <dialog id="movePiecesDialog" class="move-confirm-dialog" aria-labelledby="movePiecesTitle">
+    <form id="movePiecesForm">
+      <h2 id="movePiecesTitle">Mover peças de caixa</h2>
+      <p id="movePiecesSummary"></p>
+      <label for="moveDestinationBox">Caixa de destino — mesmo ambiente/cliente
+        <select id="moveDestinationBox" required></select>
+      </label>
+      <p id="movePiecesError" class="message move-dialog-error" role="alert" aria-live="assertive"></p>
+      <div class="auth-actions">
+        <button id="confirmMovePieces" type="submit">Mover peças</button>
+        <button id="cancelMovePieces" class="secondary" type="button">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
   <main id="appRoot" class="app" hidden>
     <header>
       <div>
@@ -451,7 +480,7 @@
     const SUPABASE_URL = "https://jpkkhuntkgbkfnicmivr.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cBLyza9hto-m366-6agP1g_UaAitSYR";
     const CLOUD_SESSION_KEY = "localizador-caixas-cloud-session-v1";
-    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), expandedBoxIds: new Set(), expandedGroupKeys: new Set(), boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "", pendingSavedItemDeletion: null };
+    const state = { barcodeMap: new Map(), scannedByBox: new Map(), scannedCodes: new Set(), expandedBoxIds: new Set(), expandedGroupKeys: new Set(), selectedMovePieces: new Map(), pendingPieceMove: null, boxes: [], boxById: new Map(), pieces: 0, lotId: "", lotName: "", scanner: null, scanning: false, lastCameraCode: "", lastCameraRead: 0, audioContext: null, cloudSession: null, cloudIndex: null, cloudRefreshTimer: null, cloudRefreshInProgress: false, cloudReadyForScans: false, recoveryAccessToken: "", pendingSavedItemDeletion: null };
     const $ = (id) => document.getElementById(id);
 
     function setMessage(element, text, isError, isWarning) {
@@ -872,6 +901,7 @@
       state.scannedCodes = new Set();
       state.expandedBoxIds.clear();
       state.expandedGroupKeys.clear();
+      state.selectedMovePieces.clear();
       state.pieces = 0;
       state.cloudReadyForScans = false;
       $("dataStatus").textContent = "Aguardando CSV";
@@ -893,6 +923,7 @@
       if (state.lotId !== lotId) {
         state.expandedBoxIds.clear();
         state.expandedGroupKeys.clear();
+        state.selectedMovePieces.clear();
       }
       const row = await cloudApi(
         "localizador_lots?select=id,file_name,boxes,pieces,filter_version,box_identity_version,created_at,updated_at,expires_at&id=eq." +
@@ -941,7 +972,7 @@
       $("resetLot").disabled = false;
       $("exportReport").disabled = false;
       updateProgress(100, "Arquivo carregado");
-      setMessage($("loadMessage"), message || "Lote compartilhado carregado. As leituras são sincronizadas entre computadores.", false);
+      if (message) setMessage($("loadMessage"), message, false);
       $("result").className = "result empty";
       $("result").textContent = "Aguardando o próximo código.";
       $("missingPiecesPanel").innerHTML = "";
@@ -978,6 +1009,9 @@
       if (state.cloudRefreshInProgress || !state.cloudSession) return;
       state.cloudRefreshInProgress = true;
       try {
+        const previousActiveLotUpdatedAt = state.cloudIndex && state.cloudIndex.lots[state.lotId]
+          ? state.cloudIndex.lots[state.lotId].updatedAt
+          : null;
         if (loadIndex || !state.cloudIndex) await cloudRefreshIndex();
         const lotIds = Object.keys(state.cloudIndex.lots);
         if (!lotIds.includes(state.lotId)) {
@@ -986,6 +1020,12 @@
           } else {
             clearLoadedLot("Nenhum lote compartilhado disponível. Importe um CSV para começar.");
           }
+        } else if (
+          !state.cloudReadyForScans ||
+          !state.cloudIndex.lots[state.lotId] ||
+          state.cloudIndex.lots[state.lotId].updatedAt !== previousActiveLotUpdatedAt
+        ) {
+          await cloudActivateLot(state.lotId);
         } else {
           applyCloudScans(await cloudLoadScans(state.lotId));
           state.cloudReadyForScans = true;
@@ -1343,6 +1383,157 @@
       $("deleteConfirmPassword").focus();
     }
 
+    function selectedPiecesForBox(boxId) {
+      return state.selectedMovePieces.get(boxId) || new Set();
+    }
+
+    function setPieceSelectedForMove(boxId, barcode, selected) {
+      const box = state.boxById.get(boxId);
+      if (!box || !(box.pieces || []).some((piece) => normalize(piece.barcode) === barcode)) return;
+      const selectedBarcodes = new Set(selectedPiecesForBox(boxId));
+      if (selected) selectedBarcodes.add(barcode);
+      else selectedBarcodes.delete(barcode);
+      if (selectedBarcodes.size) state.selectedMovePieces.set(boxId, selectedBarcodes);
+      else state.selectedMovePieces.delete(boxId);
+      renderBoxProgress();
+    }
+
+    function boxGroupKey(box) {
+      return (box && box.groupKey) || "Sem ambiente/cliente";
+    }
+
+    function openMovePiecesDialog(sourceBoxId) {
+      const sourceBox = state.boxById.get(sourceBoxId);
+      const selectedBarcodes = selectedPiecesForBox(sourceBoxId);
+      if (!sourceBox || !selectedBarcodes.size) return;
+      const destinations = state.boxes.filter((box) =>
+        box.id !== sourceBoxId &&
+        boxGroupKey(box) === boxGroupKey(sourceBox)
+      );
+      if (!destinations.length) {
+        setMessage($("loadMessage"), "Não há outra caixa disponível no mesmo ambiente/cliente para receber as peças.", true);
+        return;
+      }
+
+      state.pendingPieceMove = {
+        sourceBoxId: sourceBoxId,
+        barcodes: Array.from(selectedBarcodes)
+      };
+      $("movePiecesSummary").textContent =
+        "Mover " + selectedBarcodes.size + " peça(s) da Caixa " + sourceBox.number +
+        " (ID: " + (sourceBox.displayId || sourceBox.id) + "). Peças já conferidas continuarão marcadas como conferidas.";
+      const select = $("moveDestinationBox");
+      select.innerHTML = '<option value="">Selecione a caixa de destino</option>';
+      destinations.forEach((box) => {
+        const option = document.createElement("option");
+        option.value = box.id;
+        option.textContent = "Caixa " + box.number + " · ID: " + (box.displayId || box.id) +
+          " · " + (box.quantity || 0) + " peça(s)";
+        select.appendChild(option);
+      });
+      $("movePiecesError").textContent = "";
+      $("movePiecesError").classList.remove("error");
+      $("movePiecesDialog").showModal();
+      select.focus();
+    }
+
+    function movePiecesLocally(sourceBoxId, destinationBoxId, barcodes) {
+      const sourceBox = state.boxById.get(sourceBoxId);
+      const destinationBox = state.boxById.get(destinationBoxId);
+      if (!sourceBox || !destinationBox) throw new Error("A caixa de origem ou destino não foi encontrada.");
+      if (boxGroupKey(sourceBox) !== boxGroupKey(destinationBox)) {
+        throw new Error("As peças só podem ser movidas para outra caixa do mesmo ambiente/cliente.");
+      }
+
+      const movingCodes = new Set(barcodes);
+      const movedPieces = (sourceBox.pieces || []).filter((piece) => movingCodes.has(normalize(piece.barcode)));
+      if (!movedPieces.length || movedPieces.length !== movingCodes.size) {
+        throw new Error("Uma ou mais peças selecionadas não estão mais na caixa de origem. Atualize a página e tente novamente.");
+      }
+
+      const scannedMoved = movedPieces.filter((piece) => state.scannedCodes.has(normalize(piece.barcode))).length;
+      sourceBox.pieces = (sourceBox.pieces || []).filter((piece) => !movingCodes.has(normalize(piece.barcode)));
+      sourceBox.quantity = sourceBox.pieces.length;
+      destinationBox.pieces = (destinationBox.pieces || []).concat(movedPieces);
+      destinationBox.quantity = destinationBox.pieces.length;
+      state.scannedByBox.set(sourceBoxId, Math.max((state.scannedByBox.get(sourceBoxId) || 0) - scannedMoved, 0));
+      state.scannedByBox.set(destinationBoxId, (state.scannedByBox.get(destinationBoxId) || 0) + scannedMoved);
+
+      if (!sourceBox.pieces.length) {
+        state.boxes = state.boxes.filter((box) => box.id !== sourceBoxId);
+        state.scannedByBox.delete(sourceBoxId);
+        state.expandedBoxIds.delete(sourceBoxId);
+      }
+
+      state.boxes.forEach((box, index) => {
+        box.number = index + 1;
+        (box.pieces || []).forEach((piece) => {
+          const barcode = normalize(piece.barcode);
+          const item = state.barcodeMap.get(barcode) || {};
+          state.barcodeMap.set(barcode, Object.assign({}, item, {
+            boxId: box.id,
+            displayBoxId: box.displayId || box.id,
+            groupKey: box.groupKey || "Sem ambiente/cliente",
+            boxNumber: box.number,
+            quantity: box.quantity
+          }));
+        });
+      });
+      state.boxById = new Map(state.boxes.map((box) => [box.id, box]));
+    }
+
+    async function moveSelectedPieces(sourceBoxId, destinationBoxId, barcodes) {
+      if (state.cloudSession) {
+        const result = await cloudApi("rpc/move_localizador_pieces", {
+          method: "POST",
+          body: JSON.stringify({
+            p_lot_id: state.lotId,
+            p_source_box_id: sourceBoxId,
+            p_destination_box_id: destinationBoxId,
+            p_barcodes: barcodes
+          })
+        });
+        state.selectedMovePieces.delete(sourceBoxId);
+        if (result && result.source_deleted) state.expandedBoxIds.delete(sourceBoxId);
+        await cloudActivateLot(state.lotId, "");
+        await cloudRefreshIndex();
+        return result;
+      }
+
+      movePiecesLocally(sourceBoxId, destinationBoxId, barcodes);
+      state.selectedMovePieces.delete(sourceBoxId);
+      saveState();
+      renderBoxProgress();
+      return { moved_count: barcodes.length, source_deleted: !state.boxById.has(sourceBoxId) };
+    }
+
+    async function submitPieceMove(event) {
+      event.preventDefault();
+      const pendingMove = state.pendingPieceMove;
+      const destinationBoxId = $("moveDestinationBox").value;
+      if (!pendingMove || !destinationBoxId) return;
+      const submitButton = $("confirmMovePieces");
+      submitButton.disabled = true;
+      $("cancelMovePieces").disabled = true;
+      $("movePiecesError").textContent = "";
+      $("movePiecesError").classList.remove("error");
+      try {
+        const result = await moveSelectedPieces(pendingMove.sourceBoxId, destinationBoxId, pendingMove.barcodes);
+        const sourceName = result && result.source_deleted ? " A caixa de origem ficou vazia e foi removida." : "";
+        $("movePiecesDialog").close();
+        setMessage($("loadMessage"),
+          (result && result.moved_count || pendingMove.barcodes.length) + " peça(s) movida(s) para a caixa selecionada." +
+          " A conferência foi mantida." + sourceName, false);
+      } catch (error) {
+        console.error("Não foi possível mover as peças para outra caixa.", error);
+        $("movePiecesError").textContent = "Não foi possível mover as peças: " + error.message;
+        $("movePiecesError").classList.add("error");
+      } finally {
+        submitButton.disabled = false;
+        $("cancelMovePieces").disabled = false;
+      }
+    }
+
     async function deleteSavedItem(item, accessToken) {
       if (state.cloudSession) {
         await deleteCloudSavedItem(item, accessToken);
@@ -1439,6 +1630,7 @@
       if (state.lotId !== lotId) {
         state.expandedBoxIds.clear();
         state.expandedGroupKeys.clear();
+        state.selectedMovePieces.clear();
       }
       state.lotId = lotId;
       state.lotName = lot.fileName || "Lote salvo no navegador";
@@ -1532,23 +1724,36 @@
         const pieces = box.pieces || [];
         const checkedPieces = pieces.filter((piece) => state.scannedCodes.has(normalize(piece.barcode)));
         const openPieces = pieces.filter((piece) => !state.scannedCodes.has(normalize(piece.barcode)));
+        const selectedPieces = state.selectedMovePieces.get(box.id) || new Set();
+        const hasDestination = state.boxes.some((candidate) =>
+          candidate.id !== box.id && (candidate.groupKey || "Sem ambiente/cliente") === (box.groupKey || "Sem ambiente/cliente")
+        );
         const renderPieceGroup = (title, group, isChecked) => group.length
           ? '<div class="box-piece-group"><div class="box-piece-group-title">' + title + ' (' + group.length + ')</div>' +
-            group.map((piece) => '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
+            group.map((piece) => {
+              const barcode = normalize(piece.barcode);
+              const selected = selectedPieces.has(barcode);
+              return '<div class="box-piece ' + (isChecked ? "checked" : "open-piece") + '">' +
+              '<input class="move-piece-select" type="checkbox" data-move-piece="' + escapeHtml(barcode) + '" aria-label="Selecionar peça ' + escapeHtml(barcode) + '"' + (selected ? " checked" : "") + '>' +
               '<span><strong>' + escapeHtml(piece.description || "Sem descrição") + '</strong><small>Comprimento: ' + escapeHtml(normalize(piece.length) || "Não informado") +
               ' · Largura: ' + escapeHtml(normalize(piece.width) || "Não informada") + '</small><small>Cor: ' + escapeHtml(normalizeColorValue(piece.color)) + '</small></span><span><span class="box-piece-status">' +
-              (isChecked ? "Conferida" : "Em aberto") + '</span> · <button type="button" class="box-piece-code-copy" data-copy-code="' + escapeHtml(piece.barcode) + '" aria-label="Copiar código ' + escapeHtml(piece.barcode) + '">' + escapeHtml(piece.barcode) + '</button></span></div>').join("") +
+              (isChecked ? "Conferida" : "Em aberto") + '</span> · <button type="button" class="box-piece-code-copy" data-copy-code="' + escapeHtml(barcode) + '" aria-label="Copiar código ' + escapeHtml(barcode) + '">' + escapeHtml(barcode) + '</button></span></div>';
+            }).join("") +
             '</div>'
           : "";
         const pieceList = pieces.length
           ? renderPieceGroup("Conferidas", checkedPieces, true) + renderPieceGroup("Em aberto", openPieces, false)
           : '<div class="message">Este lote foi salvo antes da lista de peças por caixa estar disponível. Importe o CSV novamente para visualizar os detalhes.</div>';
+        const moveToolbar = '<div class="move-pieces-toolbar"><span>' + selectedPieces.size + ' peça(s) selecionada(s)</span><button type="button" data-move-box-id="' +
+          escapeHtml(box.id) + '"' + (!selectedPieces.size || !hasDestination ? " disabled" : "") + ' title="' +
+          (hasDestination ? "Mover as peças selecionadas para outra caixa do mesmo ambiente/cliente" : "Não há outra caixa disponível neste ambiente/cliente") +
+          '">Mover selecionadas</button></div>';
         const isExpanded = state.expandedBoxIds.has(box.id);
         return '<div class="box-progress-item' + (done ? ' done' : '') + (isExpanded ? ' open' : '') + '" data-box-id="' + escapeHtml(box.id) + '" role="button" tabindex="0" aria-expanded="' + isExpanded + '">' +
           '<div class="box-progress-header"><span>Caixa ' + box.number + '</span><strong>' + (done ? 'Conferida' : percent + '%') + '</strong></div>' +
           '<progress value="' + percent + '" max="100" aria-label="Progresso da Caixa ' + box.number + '">' + percent + '%</progress>' +
           '<div class="box-progress-meta"><span>ID: ' + escapeHtml(box.displayId || box.id) + '</span><span>' + scanned + ' / ' + box.quantity + ' peças</span></div>' +
-          '<div class="box-pieces"><div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
+          '<div class="box-pieces">' + moveToolbar + '<div class="box-progress-meta"><strong>Descrição</strong><strong>Código</strong></div>' + pieceList + '</div>' +
           '</div>';
       };
       if ($("boxViewMode").value === "all") {
@@ -2004,6 +2209,9 @@
       if (!file) return;
       state.lotId = "lot-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
       state.lotName = file.name;
+      state.selectedMovePieces.clear();
+      state.expandedBoxIds.clear();
+      state.expandedGroupKeys.clear();
       $("fileName").textContent = file.name;
       setMessage($("loadMessage"), "Processando arquivo...", false);
       parseCsv(file);
@@ -2021,6 +2229,13 @@
       $("deleteConfirmPassword").value = "";
       $("deleteConfirmError").textContent = "";
       $("deleteConfirmError").classList.remove("error");
+    });
+    $("movePiecesForm").addEventListener("submit", submitPieceMove);
+    $("cancelMovePieces").addEventListener("click", () => $("movePiecesDialog").close());
+    $("movePiecesDialog").addEventListener("close", () => {
+      state.pendingPieceMove = null;
+      $("movePiecesError").textContent = "";
+      $("movePiecesError").classList.remove("error");
     });
     $("lotTabs").addEventListener("click", async (event) => {
       const button = event.target.closest("[data-lot-id]");
@@ -2121,6 +2336,16 @@
       else state.expandedBoxIds.delete(item.dataset.boxId);
     }
     $("boxProgressList").addEventListener("click", (event) => {
+      const moveButton = event.target.closest("[data-move-box-id]");
+      if (moveButton) {
+        event.stopPropagation();
+        if (!moveButton.disabled) openMovePiecesDialog(moveButton.dataset.moveBoxId);
+        return;
+      }
+      if (event.target.closest(".move-piece-select")) {
+        event.stopPropagation();
+        return;
+      }
       const copyButton = event.target.closest(".box-piece-code-copy");
       if (copyButton) {
         event.stopPropagation();
@@ -2139,7 +2364,17 @@
       const item = event.target.closest(".box-progress-item");
       if (item) toggleBoxDetails(item);
     });
+    $("boxProgressList").addEventListener("change", (event) => {
+      const checkbox = event.target.closest(".move-piece-select");
+      if (!checkbox) return;
+      const item = checkbox.closest(".box-progress-item");
+      if (item) setPieceSelectedForMove(item.dataset.boxId, checkbox.dataset.movePiece, checkbox.checked);
+    });
     $("boxProgressList").addEventListener("keydown", (event) => {
+      if (event.target.closest(".move-piece-select")) {
+        event.stopPropagation();
+        return;
+      }
       const copyButton = event.target.closest(".box-piece-code-copy");
       if (copyButton && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
@@ -2319,7 +2554,7 @@
     window.addEventListener("pagehide", saveState);
     window.addEventListener("beforeunload", saveState);
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("sw.js?v=21").catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=22").catch(() => {});
     }
     initializePasswordRecovery().then((isRecovery) => {
       if (!isRecovery) initializeCloudAuth();

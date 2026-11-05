@@ -338,6 +338,146 @@ begin
 end;
 $$;
 
+create or replace function public.move_localizador_pieces(
+  p_lot_id text,
+  p_source_box_id text,
+  p_destination_box_id text,
+  p_barcodes text[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_boxes jsonb;
+  v_source_box jsonb;
+  v_destination_box jsonb;
+  v_moved_pieces jsonb;
+  v_remaining_pieces jsonb;
+  v_updated_box jsonb;
+  v_updated_boxes jsonb := '[]'::jsonb;
+  v_barcodes text[];
+  v_box record;
+  v_number integer := 0;
+  v_moved_count integer;
+  v_scanned_moved integer;
+  v_source_deleted boolean := false;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if p_source_box_id = p_destination_box_id then
+    raise exception 'Source and destination boxes must be different';
+  end if;
+
+  if exists (
+    select 1
+      from unnest(coalesce(p_barcodes, array[]::text[])) as selected(barcode)
+      where nullif(btrim(barcode), '') is null
+  ) then
+    raise exception 'Selected piece barcodes cannot be empty';
+  end if;
+
+  select array_agg(distinct barcode)
+    into v_barcodes
+    from unnest(coalesce(p_barcodes, array[]::text[])) as selected(barcode);
+
+  if coalesce(cardinality(v_barcodes), 0) = 0 then
+    raise exception 'At least one piece must be selected';
+  end if;
+
+  select boxes
+    into v_boxes
+    from public.localizador_lots
+    where id = p_lot_id and expires_at > now()
+    for update;
+
+  if v_boxes is null then
+    raise exception 'Lot not found or expired';
+  end if;
+
+  select box.value
+    into v_source_box
+    from jsonb_array_elements(v_boxes) as box(value)
+    where box.value ->> 'id' = p_source_box_id
+    limit 1;
+
+  select box.value
+    into v_destination_box
+    from jsonb_array_elements(v_boxes) as box(value)
+    where box.value ->> 'id' = p_destination_box_id
+    limit 1;
+
+  if v_source_box is null or v_destination_box is null then
+    raise exception 'Source or destination box not found';
+  end if;
+
+  if coalesce(v_source_box ->> 'groupKey', 'Sem ambiente/cliente') <>
+     coalesce(v_destination_box ->> 'groupKey', 'Sem ambiente/cliente') then
+    raise exception 'Pieces can only be moved to a box in the same environment or client';
+  end if;
+
+  select coalesce(jsonb_agg(piece.value order by piece.ordinality), '[]'::jsonb),
+         count(*)::integer
+    into v_moved_pieces, v_moved_count
+    from jsonb_array_elements(coalesce(v_source_box -> 'pieces', '[]'::jsonb)) with ordinality as piece(value, ordinality)
+    where piece.value ->> 'barcode' = any(v_barcodes);
+
+  if v_moved_count <> cardinality(v_barcodes) then
+    raise exception 'One or more selected pieces are no longer in the source box';
+  end if;
+
+  for v_box in
+    select box.value, box.ordinality
+      from jsonb_array_elements(v_boxes) with ordinality as box(value, ordinality)
+      order by box.ordinality
+  loop
+    if v_box.value ->> 'id' = p_source_box_id then
+      select coalesce(jsonb_agg(piece.value order by piece.ordinality), '[]'::jsonb)
+        into v_remaining_pieces
+        from jsonb_array_elements(coalesce(v_box.value -> 'pieces', '[]'::jsonb)) with ordinality as piece(value, ordinality)
+      where not coalesce(piece.value ->> 'barcode' = any(v_barcodes), false);
+
+      if jsonb_array_length(v_remaining_pieces) = 0 then
+        v_source_deleted := true;
+        continue;
+      end if;
+
+      v_updated_box := jsonb_set(v_box.value, '{pieces}', v_remaining_pieces, true);
+      v_updated_box := jsonb_set(v_updated_box, '{quantity}', to_jsonb(jsonb_array_length(v_remaining_pieces)), true);
+    elsif v_box.value ->> 'id' = p_destination_box_id then
+      v_remaining_pieces := coalesce(v_box.value -> 'pieces', '[]'::jsonb) || v_moved_pieces;
+      v_updated_box := jsonb_set(v_box.value, '{pieces}', v_remaining_pieces, true);
+      v_updated_box := jsonb_set(v_updated_box, '{quantity}', to_jsonb(jsonb_array_length(v_remaining_pieces)), true);
+    else
+      v_updated_box := v_box.value;
+    end if;
+
+    v_number := v_number + 1;
+    v_updated_box := jsonb_set(v_updated_box, '{number}', to_jsonb(v_number), true);
+    v_updated_boxes := v_updated_boxes || jsonb_build_array(v_updated_box);
+  end loop;
+
+  update public.localizador_scans
+    set box_id = p_destination_box_id
+    where lot_id = p_lot_id and barcode = any(v_barcodes);
+  get diagnostics v_scanned_moved = row_count;
+
+  update public.localizador_lots
+    set boxes = v_updated_boxes,
+        updated_at = now()
+    where id = p_lot_id;
+
+  return jsonb_build_object(
+    'moved_count', v_moved_count,
+    'source_deleted', v_source_deleted,
+    'scanned_moved', v_scanned_moved
+  );
+end;
+$$;
+
 create or replace function public.cleanup_expired_localizador_data()
 returns void
 language plpgsql
@@ -357,6 +497,7 @@ revoke all on function public.import_localizador_lot(jsonb) from public;
 revoke all on function public.import_localizador_backup(jsonb, text) from public;
 revoke all on function public.delete_localizador_lot(text) from public;
 revoke all on function public.delete_localizador_backup(uuid) from public;
+revoke all on function public.move_localizador_pieces(text, text, text, text[]) from public;
 revoke all on function public.cleanup_expired_localizador_data() from public, anon, authenticated;
 
 grant execute on function public.record_localizador_scan(text, text) to authenticated;
@@ -366,6 +507,7 @@ grant execute on function public.import_localizador_lot(jsonb) to authenticated;
 grant execute on function public.import_localizador_backup(jsonb, text) to authenticated;
 grant execute on function public.delete_localizador_lot(text) to authenticated;
 grant execute on function public.delete_localizador_backup(uuid) to authenticated;
+grant execute on function public.move_localizador_pieces(text, text, text, text[]) to authenticated;
 
 do $$
 declare
