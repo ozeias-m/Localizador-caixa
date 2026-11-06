@@ -920,7 +920,8 @@
     }
 
     async function cloudActivateLot(lotId, message) {
-      if (state.lotId !== lotId) {
+      const isNewLot = state.lotId !== lotId;
+      if (isNewLot) {
         state.expandedBoxIds.clear();
         state.expandedGroupKeys.clear();
         state.selectedMovePieces.clear();
@@ -973,9 +974,11 @@
       $("exportReport").disabled = false;
       updateProgress(100, "Arquivo carregado");
       if (message) setMessage($("loadMessage"), message, false);
-      $("result").className = "result empty";
-      $("result").textContent = "Aguardando o próximo código.";
-      $("missingPiecesPanel").innerHTML = "";
+      if (isNewLot) {
+        $("result").className = "result empty";
+        $("result").textContent = "Aguardando o próximo código.";
+        $("missingPiecesPanel").innerHTML = "";
+      }
       applyCloudScans(await cloudLoadScans(lotId));
       state.cloudReadyForScans = true;
       renderSavedLots(cloudWorkspaceData());
